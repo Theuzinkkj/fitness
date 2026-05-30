@@ -6,9 +6,9 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Profile } from '@/types'
-import { formatDate, mlToLiters, calculateBMI, getBMICategory } from '@/lib/utils'
+import { formatDate, calculateBMI } from '@/lib/utils'
 import {
-  Flame, Droplets, Dumbbell, TrendingUp, Target,
+  Flame, Droplets, Dumbbell, Target,
   Beef, Wheat, Zap, CheckCircle2, Clock, ArrowRight, Scale
 } from 'lucide-react'
 import Link from 'next/link'
@@ -26,9 +26,10 @@ interface DashboardViewProps {
   todayWorkouts: Array<{ id: string; workout_name: string; duration_minutes: number | null; completed: boolean }>
   recentWorkouts: Array<{ id: string; workout_name: string; date: string; duration_minutes: number | null; completed: boolean }>
   lastMeasurement: { weight: number | null; body_fat_percentage: number | null; date: string } | null
+  streak: number
 }
 
-export function DashboardView({ profile, stats, todayWorkouts, recentWorkouts, lastMeasurement }: DashboardViewProps) {
+export function DashboardView({ profile, stats, todayWorkouts, recentWorkouts, lastMeasurement, streak }: DashboardViewProps) {
   const calorieGoal = profile?.daily_calorie_goal ?? 2000
   const proteinGoal = profile?.daily_protein_goal ?? 150
   const carbGoal = profile?.daily_carb_goal ?? 250
@@ -60,11 +61,22 @@ export function DashboardView({ profile, stats, todayWorkouts, recentWorkouts, l
               {formatDate(new Date())} • Vamos fazer acontecer!
             </p>
           </div>
-          {profile?.goal && (
-            <Badge variant="default" className="hidden sm:flex">
-              🎯 {profile.goal === 'hipertrofia' ? 'Hipertrofia' : profile.goal === 'emagrecimento' ? 'Emagrecimento' : profile.goal === 'manutencao' ? 'Manutenção' : 'Performance'}
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {streak > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-full">
+                <span className="text-base">🔥</span>
+                <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{streak}</span>
+                <span className="text-xs text-orange-500 dark:text-orange-500 hidden sm:inline">
+                  {streak === 1 ? 'dia' : 'dias'}
+                </span>
+              </div>
+            )}
+            {profile?.goal && (
+              <Badge variant="default" className="hidden sm:flex">
+                🎯 {profile.goal === 'hipertrofia' ? 'Hipertrofia' : profile.goal === 'emagrecimento' ? 'Emagrecimento' : profile.goal === 'manutencao' ? 'Manutenção' : 'Performance'}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Stats Grid */}

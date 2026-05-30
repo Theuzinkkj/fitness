@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { Navbar } from '@/components/layout/navbar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { Meal, FoodItem, MealType, MEAL_TYPE_LABELS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { getTodayString } from '@/lib/utils'
-import { Plus, Trash2, ChevronDown, ChevronUp, Utensils, Beef, Wheat, Zap, Flame } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Utensils, Beef, Wheat, Zap, Flame, Search, Loader2, AlertTriangle } from 'lucide-react'
 
 interface AlimentacaoViewProps {
   userId: string
@@ -33,16 +33,46 @@ const MEAL_ICONS: Record<MealType, string> = {
   pos_treino: '💪',
 }
 
+interface FoodSearchResult {
+  product_name: string
+  nutriments: {
+    'energy-kcal_100g'?: number
+    'proteins_100g'?: number
+    'carbohydrates_100g'?: number
+    'fat_100g'?: number
+  }
+}
+
+interface Per100g {
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
+type DeleteConfirm =
+  | { type: 'meal'; id: string }
+  | { type: 'food'; id: string; meal: Meal }
+
 export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: AlimentacaoViewProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isMutating, setIsMutating] = useState(false)
   const [activeTab, setActiveTab] = useState<'hoje' | 'historico'>('hoje')
   const [showNewMeal, setShowNewMeal] = useState(false)
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null)
   const [showAddFood, setShowAddFood] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirm | null>(null)
 
   const [newMeal, setNewMeal] = useState({ name: '', meal_type: 'almoco' as MealType, notes: '' })
-  const [newFood, setNewFood] = useState({ name: '', quantity: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '' })
+  const [newFood, setNewFood] = useState({ name: '', quantity: '100', unit: 'g', calories: '', protein: '', carbs: '', fat: '' })
+
+  // Food search state
+  const [foodSearch, setFoodSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<FoodSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [per100g, setPer100g] = useState<Per100g | null>(null)
+  const searchTimeout = useRef<ReturnType<typeof setTimeout>>()
 
   const refresh = () => startTransition(() => router.refresh())
 
@@ -56,7 +86,80 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
   const carbGoal = profile?.daily_carb_goal ?? 250
   const fatGoal = profile?.daily_fat_goal ?? 65
 
+  // Recalculate macros when quantity or per100g changes
+  useEffect(() => {
+    if (!per100g) return
+    const qty = parseFloat(newFood.quantity)
+    if (isNaN(qty) || qty <= 0) return
+    const factor = qty / 100
+    setNewFood(p => ({
+      ...p,
+      calories: (per100g.calories * factor).toFixed(1),
+      protein: (per100g.protein * factor).toFixed(1),
+      carbs: (per100g.carbs * factor).toFixed(1),
+      fat: (per100g.fat * factor).toFixed(1),
+    }))
+  }, [per100g, newFood.quantity])
+
+  async function searchFood(query: string) {
+    if (query.length < 2) { setSearchResults([]); return }
+    setIsSearching(true)
+    try {
+      const res = await fetch(
+        `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(query)}&fields=product_name,nutriments&page_size=8&cc=br&lc=pt`,
+        { signal: AbortSignal.timeout(5000) }
+      )
+      const data = await res.json()
+      setSearchResults(
+        (data.products ?? []).filter((p: FoodSearchResult) =>
+          p.product_name && (p.nutriments?.['energy-kcal_100g'] !== undefined)
+        )
+      )
+    } catch {
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  function handleFoodSearchChange(value: string) {
+    setFoodSearch(value)
+    clearTimeout(searchTimeout.current)
+    searchTimeout.current = setTimeout(() => searchFood(value), 500)
+  }
+
+  function selectFood(product: FoodSearchResult) {
+    const n = product.nutriments
+    const p100: Per100g = {
+      calories: n['energy-kcal_100g'] ?? 0,
+      protein: n['proteins_100g'] ?? 0,
+      carbs: n['carbohydrates_100g'] ?? 0,
+      fat: n['fat_100g'] ?? 0,
+    }
+    const qty = parseFloat(newFood.quantity) || 100
+    const factor = qty / 100
+    setPer100g(p100)
+    setNewFood(p => ({
+      ...p,
+      name: product.product_name,
+      calories: (p100.calories * factor).toFixed(1),
+      protein: (p100.protein * factor).toFixed(1),
+      carbs: (p100.carbs * factor).toFixed(1),
+      fat: (p100.fat * factor).toFixed(1),
+    }))
+    setSearchResults([])
+    setFoodSearch('')
+  }
+
+  function resetAddFoodDialog() {
+    setNewFood({ name: '', quantity: '100', unit: 'g', calories: '', protein: '', carbs: '', fat: '' })
+    setPer100g(null)
+    setFoodSearch('')
+    setSearchResults([])
+  }
+
   async function createMeal() {
+    setIsMutating(true)
     const supabase = createClient()
     await supabase.from('meals').insert({
       user_id: userId,
@@ -68,15 +171,20 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
     setShowNewMeal(false)
     setNewMeal({ name: '', meal_type: 'almoco', notes: '' })
     refresh()
+    setIsMutating(false)
   }
 
   async function deleteMeal(id: string) {
+    setIsMutating(true)
     const supabase = createClient()
     await supabase.from('meals').delete().eq('id', id)
+    setDeleteConfirm(null)
     refresh()
+    setIsMutating(false)
   }
 
   async function addFoodItem(mealId: string) {
+    setIsMutating(true)
     const supabase = createClient()
     const calories = parseFloat(newFood.calories) || 0
     const protein = parseFloat(newFood.protein) || 0
@@ -102,13 +210,15 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
     }
 
     setShowAddFood(null)
-    setNewFood({ name: '', quantity: '', unit: 'g', calories: '', protein: '', carbs: '', fat: '' })
+    resetAddFoodDialog()
     refresh()
+    setIsMutating(false)
   }
 
   async function deleteFoodItem(foodId: string, meal: Meal) {
+    setIsMutating(true)
     const food = meal.food_items?.find(f => f.id === foodId)
-    if (!food) return
+    if (!food) { setIsMutating(false); return }
     const supabase = createClient()
     await supabase.from('food_items').delete().eq('id', foodId)
     await supabase.from('meals').update({
@@ -117,7 +227,9 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
       total_carbs: meal.total_carbs - food.carbs,
       total_fat: meal.total_fat - food.fat,
     }).eq('id', meal.id)
+    setDeleteConfirm(null)
     refresh()
+    setIsMutating(false)
   }
 
   const groupedByDate = recentMeals.reduce((acc, meal) => {
@@ -194,8 +306,8 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
                           onClick={() => setExpandedMeal(expandedMeal === meal.id ? null : meal.id)}>
                           {expandedMeal === meal.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600"
-                          onClick={() => deleteMeal(meal.id)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => setDeleteConfirm({ type: 'meal', id: meal.id })}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -220,8 +332,8 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
                                     {food.quantity}{food.unit} • {Math.round(food.calories)}kcal • P:{Math.round(food.protein)}g C:{Math.round(food.carbs)}g G:{Math.round(food.fat)}g
                                   </p>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500"
-                                  onClick={() => deleteFoodItem(food.id, meal)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                  onClick={() => setDeleteConfirm({ type: 'food', id: food.id, meal })}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
@@ -229,7 +341,7 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
                           </div>
                         )}
                         <Button size="sm" variant="outline" className="w-full gap-1"
-                          onClick={() => setShowAddFood(meal.id)}>
+                          onClick={() => { setShowAddFood(meal.id); resetAddFoodDialog() }}>
                           <Plus className="w-3.5 h-3.5" /> Adicionar Alimento
                         </Button>
                       </div>
@@ -304,24 +416,70 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewMeal(false)}>Cancelar</Button>
-            <Button onClick={createMeal} disabled={!newMeal.name}>Criar Refeição</Button>
+            <Button onClick={createMeal} disabled={!newMeal.name || isMutating}>
+              {isMutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Refeição'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Add Food Dialog */}
-      <Dialog open={!!showAddFood} onOpenChange={() => setShowAddFood(null)}>
+      <Dialog open={!!showAddFood} onOpenChange={open => { if (!open) { setShowAddFood(null); resetAddFoodDialog() } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Adicionar Alimento</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {/* Food Search */}
             <div>
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Nome do Alimento *</label>
-              <Input placeholder="Ex: Frango grelhado" value={newFood.name} onChange={e => setNewFood(p => ({ ...p, name: e.target.value }))} />
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
+                Buscar alimento
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  className="pl-9"
+                  placeholder="Digite para buscar (ex: frango, arroz...)"
+                  value={foodSearch}
+                  onChange={e => handleFoodSearchChange(e.target.value)}
+                />
+                {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />}
+              </div>
+              {searchResults.length > 0 && (
+                <div className="mt-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                  {searchResults.map((product, i) => (
+                    <button
+                      key={i}
+                      onClick={() => selectFood(product)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 last:border-0"
+                    >
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{product.product_name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {Math.round(product.nutriments['energy-kcal_100g'] ?? 0)} kcal · P:{Math.round(product.nutriments['proteins_100g'] ?? 0)}g · C:{Math.round(product.nutriments['carbohydrates_100g'] ?? 0)}g · G:{Math.round(product.nutriments['fat_100g'] ?? 0)}g · (por 100g)
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+                Fonte: Open Food Facts. Ou preencha manualmente abaixo.
+              </p>
             </div>
+
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Nome do Alimento *</label>
+                <Input placeholder="Ex: Frango grelhado" value={newFood.name} onChange={e => setNewFood(p => ({ ...p, name: e.target.value }))} />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Quantidade</label>
-                <Input type="number" placeholder="100" value={newFood.quantity} onChange={e => setNewFood(p => ({ ...p, quantity: e.target.value }))} />
+                <Input
+                  type="number"
+                  placeholder="100"
+                  value={newFood.quantity}
+                  onChange={e => setNewFood(p => ({ ...p, quantity: e.target.value }))}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Unidade</label>
@@ -333,28 +491,69 @@ export function AlimentacaoView({ userId, todayMeals, recentMeals, profile }: Al
                 </Select>
               </div>
             </div>
+
+            {per100g && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 rounded-lg">
+                Valores calculados automaticamente para {newFood.quantity}{newFood.unit}. Ajuste se necessário.
+              </p>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Calorias (kcal)</label>
-                <Input type="number" placeholder="0" value={newFood.calories} onChange={e => setNewFood(p => ({ ...p, calories: e.target.value }))} />
+                <Input type="number" placeholder="0" value={newFood.calories} onChange={e => { setPer100g(null); setNewFood(p => ({ ...p, calories: e.target.value })) }} />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Proteínas (g)</label>
-                <Input type="number" placeholder="0" value={newFood.protein} onChange={e => setNewFood(p => ({ ...p, protein: e.target.value }))} />
+                <Input type="number" placeholder="0" value={newFood.protein} onChange={e => { setPer100g(null); setNewFood(p => ({ ...p, protein: e.target.value })) }} />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Carboidratos (g)</label>
-                <Input type="number" placeholder="0" value={newFood.carbs} onChange={e => setNewFood(p => ({ ...p, carbs: e.target.value }))} />
+                <Input type="number" placeholder="0" value={newFood.carbs} onChange={e => { setPer100g(null); setNewFood(p => ({ ...p, carbs: e.target.value })) }} />
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Gorduras (g)</label>
-                <Input type="number" placeholder="0" value={newFood.fat} onChange={e => setNewFood(p => ({ ...p, fat: e.target.value }))} />
+                <Input type="number" placeholder="0" value={newFood.fat} onChange={e => { setPer100g(null); setNewFood(p => ({ ...p, fat: e.target.value })) }} />
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddFood(null)}>Cancelar</Button>
-            <Button onClick={() => showAddFood && addFoodItem(showAddFood)} disabled={!newFood.name}>Adicionar</Button>
+            <Button variant="outline" onClick={() => { setShowAddFood(null); resetAddFoodDialog() }}>Cancelar</Button>
+            <Button onClick={() => showAddFood && addFoodItem(showAddFood)} disabled={!newFood.name || isMutating}>
+              {isMutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Adicionar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={open => { if (!open) setDeleteConfirm(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-5 h-5" />
+              Confirmar exclusão
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {deleteConfirm?.type === 'meal'
+              ? 'Tem certeza que deseja excluir esta refeição e todos os alimentos registrados?'
+              : 'Tem certeza que deseja remover este alimento da refeição?'
+            }
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={isMutating}
+              onClick={() => {
+                if (!deleteConfirm) return
+                if (deleteConfirm.type === 'meal') deleteMeal(deleteConfirm.id)
+                else deleteFoodItem(deleteConfirm.id, deleteConfirm.meal)
+              }}
+            >
+              {isMutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Excluir'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -27,6 +27,81 @@ const QUICK_PROMPTS = [
   { icon: <Utensils className="w-4 h-4" />, label: 'Alimentos com mais proteína', prompt: 'Quais são os 10 alimentos com mais proteína por 100g? Inclua opções vegetais e animais com quantidade de proteína.' },
 ]
 
+// --- Markdown renderer ---
+function inlineFormat(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+        }
+        if (part.startsWith('*') && part.endsWith('*')) {
+          return <em key={i}>{part.slice(1, -1)}</em>
+        }
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <code key={i} className="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs font-mono">{part.slice(1, -1)}</code>
+        }
+        return part
+      })}
+    </>
+  )
+}
+
+function MarkdownText({ content }: { content: string }) {
+  const lines = content.split('\n')
+  const result: React.ReactNode[] = []
+  let listItems: string[] = []
+  let listType: 'ul' | 'ol' | null = null
+
+  function flushList(key: string) {
+    if (listItems.length === 0) return
+    if (listType === 'ul') {
+      result.push(
+        <ul key={key} className="list-disc pl-5 my-1 space-y-0.5">
+          {listItems.map((item, i) => <li key={i}>{inlineFormat(item)}</li>)}
+        </ul>
+      )
+    } else {
+      result.push(
+        <ol key={key} className="list-decimal pl-5 my-1 space-y-0.5">
+          {listItems.map((item, i) => <li key={i}>{inlineFormat(item)}</li>)}
+        </ol>
+      )
+    }
+    listItems = []
+    listType = null
+  }
+
+  lines.forEach((line, i) => {
+    if (line.startsWith('### ')) {
+      flushList(`list-${i}`)
+      result.push(<h3 key={i} className="font-semibold text-sm mt-3 mb-0.5">{inlineFormat(line.slice(4))}</h3>)
+    } else if (line.startsWith('## ')) {
+      flushList(`list-${i}`)
+      result.push(<h2 key={i} className="font-bold mt-3 mb-1">{inlineFormat(line.slice(3))}</h2>)
+    } else if (line.startsWith('# ')) {
+      flushList(`list-${i}`)
+      result.push(<h1 key={i} className="font-bold text-base mt-3 mb-1">{inlineFormat(line.slice(2))}</h1>)
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      if (listType !== 'ul') { flushList(`list-${i}`); listType = 'ul' }
+      listItems.push(line.slice(2))
+    } else if (/^\d+\.\s/.test(line)) {
+      if (listType !== 'ol') { flushList(`list-${i}`); listType = 'ol' }
+      listItems.push(line.replace(/^\d+\.\s/, ''))
+    } else if (line.trim() === '' || line === '---') {
+      flushList(`list-${i}`)
+      if (i < lines.length - 1) result.push(<div key={i} className="h-1" />)
+    } else {
+      flushList(`list-${i}`)
+      result.push(<p key={i}>{inlineFormat(line)}</p>)
+    }
+  })
+  flushList('list-end')
+
+  return <div className="space-y-0.5 text-sm leading-relaxed">{result}</div>
+}
+
 export function IAView({ userId, profile, conversations }: IAViewProps) {
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([])
@@ -80,7 +155,6 @@ export function IAView({ userId, profile, conversations }: IAViewProps) {
     setInput('')
     setIsLoading(true)
 
-    // Update conversation title if first message
     if (messages.length === 0) {
       const supabase = createClient()
       await supabase.from('ai_conversations').update({
@@ -103,7 +177,7 @@ export function IAView({ userId, profile, conversations }: IAViewProps) {
     } catch (error: any) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `❌ ${error.message || 'Erro ao processar. Tente novamente.'}`,
+        content: `Erro ao processar. Tente novamente. (${error.message ?? 'desconhecido'})`,
       }])
     } finally {
       setIsLoading(false)
@@ -198,12 +272,15 @@ export function IAView({ userId, profile, conversations }: IAViewProps) {
                     }
                   </div>
                   <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-                    <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                    <div className={`px-4 py-3 rounded-2xl ${
                       msg.role === 'user'
-                        ? 'bg-emerald-500 text-white rounded-tr-sm'
+                        ? 'bg-emerald-500 text-white rounded-tr-sm text-sm leading-relaxed'
                         : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-100 rounded-tl-sm shadow-sm'
                     }`}>
-                      {msg.content}
+                      {msg.role === 'user'
+                        ? msg.content
+                        : <MarkdownText content={msg.content} />
+                      }
                     </div>
                   </div>
                 </div>

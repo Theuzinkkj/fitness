@@ -6,14 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Profile, BodyMeasurement, PersonalRecord } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { getTodayString, calculateBMI, getBMICategory, formatDate, formatDateShort } from '@/lib/utils'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
-import { Plus, TrendingUp, Scale, Target, Trophy, Activity } from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  Area, AreaChart, Legend,
+} from 'recharts'
+import { Plus, TrendingUp, Scale, Target, Trophy, Activity, Loader2 } from 'lucide-react'
 
 interface ProgressoViewProps {
   userId: string
@@ -25,6 +27,7 @@ interface ProgressoViewProps {
 export function ProgressoView({ userId, profile, measurements, personalRecords }: ProgressoViewProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [isMutating, setIsMutating] = useState(false)
   const [activeTab, setActiveTab] = useState<'corpo' | 'medidas' | 'records'>('corpo')
   const [showNewMeasurement, setShowNewMeasurement] = useState(false)
   const [showNewRecord, setShowNewRecord] = useState(false)
@@ -48,11 +51,34 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
     ? latestMeasurement.weight - previousMeasurement.weight
     : null
 
+  // Weight change color depends on goal: gaining weight is good for hypertrophy, bad for weight loss
+  const goal = profile?.goal
+  const weightChangePositive = weightChange !== null
+    ? (goal === 'hipertrofia' ? weightChange > 0 : weightChange < 0)
+    : false
+  const weightChangeColor = weightChange === null
+    ? ''
+    : weightChangePositive
+    ? 'text-emerald-500'
+    : 'text-red-500'
+
   const weightChartData = measurements
     .filter(m => m.weight)
-    .map(m => ({ date: formatDateShort(m.date), weight: m.weight, fat: m.body_fat_percentage }))
+    .map(m => ({ date: formatDateShort(m.date), peso: m.weight, gordura: m.body_fat_percentage }))
+
+  // Build measurement history chart data — only include measurements that have at least one body measure
+  const measurementChartData = measurements
+    .filter(m => m.waist || m.chest || m.left_arm || m.right_arm || m.hips)
+    .map(m => ({
+      date: formatDateShort(m.date),
+      cintura: m.waist,
+      peito: m.chest,
+      quadril: m.hips,
+      braço: m.left_arm ? ((m.left_arm + (m.right_arm ?? m.left_arm)) / 2) : undefined,
+    }))
 
   async function saveMeasurement() {
+    setIsMutating(true)
     const supabase = createClient()
     const data: Record<string, string | number | null> = { user_id: userId, date: measurement.date }
     if (measurement.weight) data.weight = parseFloat(measurement.weight)
@@ -73,10 +99,17 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
       await supabase.from('profiles').update({ weight: parseFloat(measurement.weight) }).eq('id', userId)
     }
     setShowNewMeasurement(false)
+    setMeasurement({
+      weight: '', body_fat_percentage: '', chest: '', waist: '', hips: '',
+      left_arm: '', right_arm: '', left_thigh: '', right_thigh: '',
+      left_calf: '', right_calf: '', notes: '', date: getTodayString(),
+    })
+    setIsMutating(false)
     refresh()
   }
 
   async function saveRecord() {
+    setIsMutating(true)
     const supabase = createClient()
     await supabase.from('personal_records').insert({
       user_id: userId,
@@ -88,6 +121,7 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
     })
     setShowNewRecord(false)
     setPrData({ exercise_name: '', weight: '', reps: '', notes: '', date: getTodayString() })
+    setIsMutating(false)
     refresh()
   }
 
@@ -123,8 +157,9 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
                 {currentWeight ? `${currentWeight}kg` : '--'}
               </p>
               {weightChange !== null && (
-                <p className={`text-xs mt-1 ${weightChange < 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                <p className={`text-xs mt-1 ${weightChangeColor}`}>
                   {weightChange > 0 ? '+' : ''}{weightChange.toFixed(1)}kg desde última medição
+                  {goal === 'hipertrofia' && weightChange > 0 ? ' 💪' : goal === 'emagrecimento' && weightChange < 0 ? ' 🎉' : ''}
                 </p>
               )}
             </CardContent>
@@ -174,9 +209,9 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
           ))}
         </div>
 
+        {/* Peso/Gordura tab */}
         {activeTab === 'corpo' && (
           <div className="space-y-6">
-            {/* Weight Chart */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -204,7 +239,10 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} domain={['dataMin - 2', 'dataMax + 2']} />
                       <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                      <Area type="monotone" dataKey="weight" name="Peso (kg)" stroke="#10b981" fill="url(#weightGradient)" strokeWidth={2} dot={{ r: 4, fill: '#10b981' }} />
+                      <Area type="monotone" dataKey="peso" name="Peso (kg)" stroke="#10b981" fill="url(#weightGradient)" strokeWidth={2} dot={{ r: 4, fill: '#10b981' }} />
+                      {weightChartData.some(d => d.gordura) && (
+                        <Line type="monotone" dataKey="gordura" name="% Gordura" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: '#f97316' }} strokeDasharray="4 2" />
+                      )}
                     </AreaChart>
                   </ResponsiveContainer>
                 )}
@@ -241,30 +279,85 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
           </div>
         )}
 
+        {/* Medidas tab */}
         {activeTab === 'medidas' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Measurements evolution chart */}
+            {measurementChartData.length >= 2 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-blue-500" /> Evolução das Medidas (cm)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <LineChart data={measurementChartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} domain={['dataMin - 3', 'dataMax + 3']} />
+                      <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      {measurementChartData.some(d => d.cintura) && (
+                        <Line type="monotone" dataKey="cintura" name="Cintura" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                      )}
+                      {measurementChartData.some(d => d.peito) && (
+                        <Line type="monotone" dataKey="peito" name="Peito" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                      )}
+                      {measurementChartData.some(d => d.quadril) && (
+                        <Line type="monotone" dataKey="quadril" name="Quadril" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
+                      )}
+                      {measurementChartData.some(d => d.braço) && (
+                        <Line type="monotone" dataKey="braço" name="Braço (média)" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                      )}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Current measurements grid */}
             {latestMeasurement ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                  { label: 'Peito', value: latestMeasurement.chest },
-                  { label: 'Cintura', value: latestMeasurement.waist },
-                  { label: 'Quadril', value: latestMeasurement.hips },
-                  { label: 'Braço Esq.', value: latestMeasurement.left_arm },
-                  { label: 'Braço Dir.', value: latestMeasurement.right_arm },
-                  { label: 'Coxa Esq.', value: latestMeasurement.left_thigh },
-                  { label: 'Coxa Dir.', value: latestMeasurement.right_thigh },
-                  { label: 'Panturrilha Esq.', value: latestMeasurement.left_calf },
-                  { label: 'Panturrilha Dir.', value: latestMeasurement.right_calf },
-                ].map(({ label, value }) => (
-                  <Card key={label}>
-                    <CardContent className="p-4">
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                        {value ? `${value}cm` : '--'}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
+                  Última medição: {formatDate(latestMeasurement.date)}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {([
+                    { label: 'Peito', value: latestMeasurement.chest },
+                    { label: 'Cintura', value: latestMeasurement.waist },
+                    { label: 'Quadril', value: latestMeasurement.hips },
+                    { label: 'Braço Esq.', value: latestMeasurement.left_arm },
+                    { label: 'Braço Dir.', value: latestMeasurement.right_arm },
+                    { label: 'Coxa Esq.', value: latestMeasurement.left_thigh },
+                    { label: 'Coxa Dir.', value: latestMeasurement.right_thigh },
+                    { label: 'Panturrilha Esq.', value: latestMeasurement.left_calf },
+                    { label: 'Panturrilha Dir.', value: latestMeasurement.right_calf },
+                  ] as { label: string; value: number | null }[]).map(({ label, value }) => {
+                    // Find the previous measurement's value for this field
+                    const key = label === 'Peito' ? 'chest' : label === 'Cintura' ? 'waist' : label === 'Quadril' ? 'hips'
+                      : label === 'Braço Esq.' ? 'left_arm' : label === 'Braço Dir.' ? 'right_arm'
+                      : label === 'Coxa Esq.' ? 'left_thigh' : label === 'Coxa Dir.' ? 'right_thigh'
+                      : label === 'Panturrilha Esq.' ? 'left_calf' : 'right_calf'
+                    const prevValue = previousMeasurement ? (previousMeasurement as any)[key] as number | null : null
+                    const diff = value && prevValue ? value - prevValue : null
+                    return (
+                      <Card key={label}>
+                        <CardContent className="p-4">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
+                          <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            {value ? `${value}cm` : '--'}
+                          </p>
+                          {diff !== null && (
+                            <p className={`text-xs mt-1 ${diff < 0 ? 'text-blue-500' : diff > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
+                              {diff > 0 ? '+' : ''}{diff.toFixed(1)}cm vs anterior
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
               </div>
             ) : (
               <Card>
@@ -277,6 +370,7 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
           </div>
         )}
 
+        {/* Records tab */}
         {activeTab === 'records' && (
           <div className="space-y-4">
             <div className="flex justify-end">
@@ -336,13 +430,13 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
             </div>
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Medidas (cm)</p>
             <div className="grid grid-cols-2 gap-3">
-              {[
+              {([
                 { label: 'Peito', key: 'chest' }, { label: 'Cintura', key: 'waist' },
                 { label: 'Quadril', key: 'hips' }, { label: 'Braço Esq.', key: 'left_arm' },
                 { label: 'Braço Dir.', key: 'right_arm' }, { label: 'Coxa Esq.', key: 'left_thigh' },
                 { label: 'Coxa Dir.', key: 'right_thigh' }, { label: 'Panturrilha Esq.', key: 'left_calf' },
                 { label: 'Panturrilha Dir.', key: 'right_calf' },
-              ].map(({ label, key }) => (
+              ] as { label: string; key: string }[]).map(({ label, key }) => (
                 <div key={key}>
                   <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 block">{label}</label>
                   <Input type="number" step="0.1" placeholder="0" value={(measurement as any)[key]} onChange={e => setMeasurement(p => ({ ...p, [key]: e.target.value }))} />
@@ -356,7 +450,9 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewMeasurement(false)}>Cancelar</Button>
-            <Button onClick={saveMeasurement}>Salvar Medições</Button>
+            <Button onClick={saveMeasurement} disabled={isMutating}>
+              {isMutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Medições'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -391,7 +487,9 @@ export function ProgressoView({ userId, profile, measurements, personalRecords }
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewRecord(false)}>Cancelar</Button>
-            <Button onClick={saveRecord} disabled={!prData.exercise_name}>Salvar Record</Button>
+            <Button onClick={saveRecord} disabled={!prData.exercise_name || isMutating}>
+              {isMutating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar Record'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
