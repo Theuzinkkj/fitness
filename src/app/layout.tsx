@@ -8,6 +8,11 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 export const metadata: Metadata = {
   title: 'FitHub - Seu Hub de Saúde Pessoal',
   description: 'Centralize treino, alimentação, evolução física e inteligência artificial em uma única plataforma moderna.',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
