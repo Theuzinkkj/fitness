@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import OpenAI from 'openai'
+import Groq from 'groq-sdk'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -49,8 +49,8 @@ DIRETRIZES:
 - Se não tiver perfil completo, peça as informações necessárias
 - Nunca substitua consulta médica profissional para questões de saúde complexas`
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages.map((m: { role: string; content: string }) => ({
