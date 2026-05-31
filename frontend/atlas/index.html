@@ -589,7 +589,7 @@
     if (!hash || !salt) { AtlasApp.launchApp(); return; }
     if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
     CryptoManager.verifyPassword(pw, hash, salt).then(ok => {
-      if (ok) { Storage.set('vault._unlocked', true); AtlasApp.launchApp(); }
+      if (ok) { Storage.set('vault._unlocked', true); sessionStorage.setItem('atlas_vault_session', '1'); AtlasApp.launchApp(); }
       else {
         err.textContent = 'Senha incorreta.';
         err.style.display = 'block';

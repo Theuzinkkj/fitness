@@ -369,6 +369,7 @@ const Vault = (() => {
   function lockVault() {
     unlocked = false;
     masterPassword = '';
+    sessionStorage.removeItem('atlas_vault_session');
     AtlasApp.toast('Cofre bloqueado', 'info');
     render();
   }

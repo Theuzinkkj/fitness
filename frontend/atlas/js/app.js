@@ -33,6 +33,7 @@ const AtlasApp = (() => {
 
   async function checkVaultSetup() {
     document.getElementById('loadingScreen').style.display = 'none';
+    if (sessionStorage.getItem('atlas_vault_session')) { launchApp(); return; }
     const masterHash = Storage.get('vault.masterHash');
     const screen = document.getElementById('vaultUnlockScreen');
     screen.classList.remove('hidden');
@@ -47,6 +48,7 @@ const AtlasApp = (() => {
   }
 
   function skipVault() {
+    sessionStorage.setItem('atlas_vault_session', '1');
     document.getElementById('vaultUnlockScreen').classList.add('hidden');
     launchApp();
   }
