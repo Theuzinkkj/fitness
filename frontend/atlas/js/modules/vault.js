@@ -188,12 +188,40 @@ const Vault = (() => {
             <button class="input-group-btn" type="button" onclick="Vault._toggleMasterVis()">👁</button>
           </div>
         </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:16px">
+          Esqueceu a senha?
+          <button type="button" onclick="Vault.confirmReset()" style="background:none;border:none;color:var(--danger,#e74c3c);cursor:pointer;font-size:12px;padding:0;text-decoration:underline">Redefinir cofre</button>
+          (apaga todas as senhas salvas)
+        </p>
       </div>
     `, [
       { label: 'Cancelar', class: 'btn-outline', action: () => AtlasApp.closeModal() },
       { label: 'Desbloquear', class: 'btn-primary', action: unlockApp }
     ]);
     setTimeout(() => { const inp = el('masterPassInput'); if (inp) inp.focus(); }, 100);
+  }
+
+  function confirmReset() {
+    AtlasApp.openModal('Redefinir Cofre', `
+      <p style="color:var(--danger,#e74c3c);font-weight:600">⚠️ Atenção</p>
+      <p>Isso irá apagar <strong>todas as senhas salvas</strong> e remover a senha mestre. Esta ação é irreversível.</p>
+      <p style="margin-top:12px">Tem certeza que deseja continuar?</p>
+    `, [
+      { label: 'Cancelar', class: 'btn-outline', action: () => AtlasApp.closeModal() },
+      { label: 'Redefinir tudo', class: 'btn-danger', action: resetVault }
+    ]);
+  }
+
+  function resetVault() {
+    Storage.set('vault.masterHash', null);
+    Storage.set('vault.salt', null);
+    Storage.set('vault.entries', []);
+    unlocked = false;
+    masterPassword = '';
+    AtlasApp.closeModal();
+    AtlasApp.toast('Cofre redefinido. Configure uma nova senha mestre.', 'info');
+    Storage.logActivity('Cofre', 'Cofre redefinido');
+    render();
   }
 
   function _toggleMasterVis() {
@@ -363,6 +391,7 @@ const Vault = (() => {
     openAddModal, openEdit, deleteEntry,
     toggleShowPass, copyPass, lockVault,
     isUnlocked,
+    confirmReset, resetVault,
     _toggleMasterVis, _togglePassVis
   };
 })();
