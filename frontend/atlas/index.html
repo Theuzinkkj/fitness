@@ -576,27 +576,39 @@
 <script src="/atlas/js/app.js"></script>
 <script>
   // Vault unlock helpers
-  function setupVault() {
+  function withVaultTimeout(promise, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' demorou demais. Recarregue a pagina e tente novamente.')), 20000))
+    ]);
+  }
+
+  async function setupVault() {
     const pw = document.getElementById('vaultSetupPassword').value;
     const pw2 = document.getElementById('vaultSetupConfirm').value;
     const err = document.getElementById('vaultSetupError');
     const btn = document.querySelector('#vaultSetupForm .btn-atlas');
     err.style.display = 'none';
-    if (!pw || pw.length < 4) { err.textContent='Senha muito curta (mínimo 4 caracteres).'; err.style.display='block'; return; }
-    if (pw !== pw2) { err.textContent='Senhas não conferem.'; err.style.display='block'; return; }
-    if (btn) { btn.disabled = true; btn.textContent = 'Configurando…'; }
-    CryptoManager.hashPassword(pw).then(({hash,salt}) => {
+    if (!pw || pw.length < 4) { err.textContent = 'Senha muito curta (minimo 4 caracteres).'; err.style.display = 'block'; return; }
+    if (pw !== pw2) { err.textContent = 'Senhas nao conferem.'; err.style.display = 'block'; return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Configurando...'; }
+
+    try {
+      const { hash, salt } = await withVaultTimeout(CryptoManager.hashPassword(pw), 'A configuracao do cofre');
       Storage.set('vault.masterHash', hash);
       Storage.set('vault.salt', salt);
       Storage.set('vault._unlocked', true);
+      Storage.save();
+      sessionStorage.setItem('atlas_vault_session', '1');
       AtlasApp.launchApp();
-    }).catch(e => {
+    } catch (e) {
       err.textContent = 'Erro ao configurar cofre: ' + (e && e.message ? e.message : 'tente novamente.');
       err.style.display = 'block';
       if (btn) { btn.disabled = false; btn.textContent = 'Configurar cofre'; }
-    });
+    }
   }
-  function unlockVault() {
+
+  async function unlockVault() {
     const pw = document.getElementById('vaultUnlockPassword').value;
     const err = document.getElementById('vaultUnlockError');
     const btn = document.querySelector('#vaultUnlockForm .btn-atlas');
@@ -604,19 +616,25 @@
     const hash = Storage.get('vault.masterHash');
     const salt = Storage.get('vault.salt');
     if (!hash || !salt) { AtlasApp.launchApp(); return; }
-    if (btn) { btn.disabled = true; btn.textContent = 'Verificando…'; }
-    CryptoManager.verifyPassword(pw, hash, salt).then(ok => {
-      if (ok) { Storage.set('vault._unlocked', true); sessionStorage.setItem('atlas_vault_session', '1'); AtlasApp.launchApp(); }
-      else {
+    if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+
+    try {
+      const ok = await withVaultTimeout(CryptoManager.verifyPassword(pw, hash, salt), 'A verificacao da senha');
+      if (ok) {
+        Storage.set('vault._unlocked', true);
+        Storage.save();
+        sessionStorage.setItem('atlas_vault_session', '1');
+        AtlasApp.launchApp();
+      } else {
         err.textContent = 'Senha incorreta.';
         err.style.display = 'block';
         if (btn) { btn.disabled = false; btn.textContent = 'Desbloquear'; }
       }
-    }).catch(e => {
+    } catch (e) {
       err.textContent = 'Erro ao verificar senha: ' + (e && e.message ? e.message : 'tente novamente.');
       err.style.display = 'block';
       if (btn) { btn.disabled = false; btn.textContent = 'Desbloquear'; }
-    });
+    }
   }
 </script>
 </body>
