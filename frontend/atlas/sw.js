@@ -1,5 +1,5 @@
 /* ===== ATLAS SERVICE WORKER ===== */
-const CACHE_VERSION = 'atlas-v2.1.15';
+const CACHE_VERSION = 'atlas-v2.1.16';
 const CORE_ASSETS = [
   '/atlas', '/atlas/', '/atlas/index.html',
   '/atlas/css/app.css',

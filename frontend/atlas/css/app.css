@@ -79,9 +79,19 @@
   padding: 0;
 }
 
-html { font-size: 16px; scroll-behavior: smooth; }
+html {
+  width: 100%;
+  min-width: 0;
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 body {
+  width: 100%;
+  min-width: 0;
+  max-width: 100dvw;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.5;
@@ -90,6 +100,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+}
+
+.app {
+  width: 100%;
+  max-width: 100dvw;
+  overflow-x: clip;
 }
 
 .hidden { display: none !important; }
@@ -4015,7 +4031,8 @@ kbd {
    ============================================================ */
 @media (max-width: 768px) {
   :root {
-    --sidebar-w: 260px;
+    --sidebar-w: min(260px, 86dvw);
+    --topbar-h: 56px;
   }
 
   .sidebar {
@@ -4030,6 +4047,9 @@ kbd {
 
   .topbar {
     left: 0 !important;
+    width: 100%;
+    padding: 0 12px;
+    gap: 10px;
   }
 
   .topbar-menu-btn {
@@ -4038,6 +4058,8 @@ kbd {
 
   .main {
     margin-left: 0 !important;
+    width: 100%;
+    max-width: 100dvw;
   }
 
   .mobile-menu-btn {
@@ -4045,7 +4067,25 @@ kbd {
   }
 
   .section {
-    padding: 20px 16px 32px;
+    padding: 18px 12px 28px;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .topbar-title {
+    min-width: 0;
+    max-width: 52dvw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 22px;
+  }
+
+  .topbar-right {
+    gap: 6px;
+  }
+
+  .user-name {
+    display: none;
   }
 
   .filter-bar {
@@ -4128,7 +4168,7 @@ kbd {
   .search-results-panel {
     top: calc(var(--topbar-h) + 8px);
     left: 12px;
-    width: calc(100vw - 24px);
+    width: calc(100dvw - 24px);
   }
 
   .mobile-overlay {
@@ -4145,8 +4185,19 @@ kbd {
 @media (max-width: 480px) {
   .todos-stats,
   .study-stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .dashboard-stats,
+  .goals-overview,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-title {
+    max-width: 48dvw;
+    font-size: 20px;
   }
 
   .tools-tabs {
