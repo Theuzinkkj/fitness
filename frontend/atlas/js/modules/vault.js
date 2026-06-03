@@ -7,6 +7,17 @@ const Vault = (() => {
   let unlocked       = false;
   let masterPassword = '';
   let searchQuery    = '';
+  let categoryFilter = 'all';
+
+  const CATEGORIES = [
+    { id: 'site', label: 'Site', icon: '🌐', domains: ['google', 'github', 'netflix', 'spotify', 'amazon', 'facebook', 'instagram', 'x.com', 'twitter', 'linkedin', 'youtube'] },
+    { id: 'bank', label: 'Banco', icon: '🏦', domains: ['nubank', 'itau', 'bradesco', 'santander', 'caixa', 'bb.com', 'banco', 'inter', 'c6bank', 'picpay'] },
+    { id: 'work', label: 'Trabalho', icon: '💼', domains: ['slack', 'notion', 'trello', 'asana', 'figma', 'office', 'microsoft', 'atlassian', 'jira'] },
+    { id: 'email', label: 'E-mail', icon: '✉️', domains: ['gmail', 'outlook', 'hotmail', 'proton', 'icloud', 'yahoo'] },
+    { id: 'social', label: 'Social', icon: '👥', domains: ['instagram', 'facebook', 'tiktok', 'twitter', 'x.com', 'discord', 'reddit'] },
+    { id: 'device', label: 'Dispositivo', icon: '💻', domains: ['wifi', 'roteador', 'pc', 'windows', 'apple', 'android'] },
+    { id: 'other', label: 'Outro', icon: '🔑', domains: [] }
+  ];
 
   const el = (id) => document.getElementById(id);
 
@@ -17,11 +28,16 @@ const Vault = (() => {
   /* ---- render ---- */
   function render() {
     const grid    = el('vaultGrid');
-    const locked  = el('vaultLockedNotice');
+    const locked  = el('vaultLocked') || el('vaultLockedNotice');
+    const empty   = el('vaultEmpty');
     if (!grid) return;
+    renderFilters();
 
     if (!isConfigured()) {
       grid.innerHTML = '';
+      updateSubtitle([]);
+      if (empty) empty.classList.add('hidden');
+      if (locked) locked.classList.remove('hidden');
       if (locked) locked.innerHTML = `
         <div class="vault-locked">
           <div class="vault-locked-icon">🔐</div>
@@ -34,6 +50,9 @@ const Vault = (() => {
 
     if (!isUnlocked()) {
       grid.innerHTML = '';
+      updateSubtitle(Storage.get('vault.entries') || []);
+      if (empty) empty.classList.add('hidden');
+      if (locked) locked.classList.remove('hidden');
       if (locked) locked.innerHTML = `
         <div class="vault-locked">
           <div class="vault-locked-icon">🔒</div>
@@ -44,7 +63,11 @@ const Vault = (() => {
       return;
     }
 
-    if (locked) locked.innerHTML = '';
+    if (locked) {
+      locked.innerHTML = '';
+      locked.classList.add('hidden');
+    }
+    if (empty) empty.classList.add('hidden');
     renderEntries();
   }
 
@@ -52,34 +75,52 @@ const Vault = (() => {
     const grid = el('vaultGrid');
     if (!grid) return;
     let entries = Storage.get('vault.entries') || [];
+    updateSubtitle(entries);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       entries = entries.filter(e =>
         e.service.toLowerCase().includes(q) ||
         (e.login  || '').toLowerCase().includes(q) ||
-        (e.url    || '').toLowerCase().includes(q)
+        (e.url    || '').toLowerCase().includes(q) ||
+        (e.category || '').toLowerCase().includes(q)
       );
     }
+    if (categoryFilter !== 'all') entries = entries.filter(e => normalizeCategory(e) === categoryFilter);
     if (!entries.length) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1">
-          <div class="empty-state-icon">🔑</div>
+          <div class="empty-state-icon">${categoryFilter === 'all' ? '🔑' : categoryInfo(categoryFilter).icon}</div>
           <h3>${searchQuery ? 'Nenhum resultado' : 'Nenhuma senha salva'}</h3>
-          <p>${searchQuery ? 'Tente outra busca.' : 'Adicione sua primeira senha clicando no botão acima.'}</p>
+          <p>${searchQuery || categoryFilter !== 'all' ? 'Tente outro filtro ou busca.' : 'Adicione sua primeira senha clicando no botão acima.'}</p>
         </div>`;
       return;
     }
     grid.innerHTML = entries.map(e => buildCard(e)).join('');
   }
 
+  function updateSubtitle(entries) {
+    const sub = el('vaultSubtitle');
+    if (!sub) return;
+    const total = entries.length;
+    const filtered = categoryFilter === 'all' ? total : entries.filter(e => normalizeCategory(e) === categoryFilter).length;
+    sub.textContent = categoryFilter === 'all'
+      ? `${total} ${total === 1 ? 'entrada' : 'entradas'}`
+      : `${filtered} em ${categoryInfo(categoryFilter).label}`;
+  }
+
   function buildCard(entry) {
+    const cat = categoryInfo(normalizeCategory(entry));
+    const icon = entry.icon || cat.icon;
     return `
       <div class="vault-card" data-id="${entry.id}">
         <div class="vault-card-header">
-          <div class="vault-service-icon">🔑</div>
+          <div class="vault-service-icon">${escHtml(icon)}</div>
           <div>
             <div class="vault-service-name">${escHtml(entry.service)}</div>
-            ${entry.url ? `<div style="font-size:12px;color:var(--text-muted)">${escHtml(entry.url)}</div>` : ''}
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span class="vault-category-badge">${cat.icon} ${escHtml(cat.label)}</span>
+              ${entry.url ? `<span style="font-size:12px;color:var(--text-muted)">${escHtml(cleanUrl(entry.url))}</span>` : ''}
+            </div>
           </div>
         </div>
         <div class="vault-field">
@@ -263,34 +304,79 @@ const Vault = (() => {
 
   function _openEntryModal(entry) {
     const isEdit = !!entry;
+    const initialCategory = isEdit ? normalizeCategory(entry) : 'site';
+    const initialIcon = isEdit ? (entry.icon || categoryInfo(initialCategory).icon) : categoryInfo(initialCategory).icon;
     AtlasApp.openModal(isEdit ? 'Editar Senha' : 'Adicionar Senha', `
-      <div class="form-group">
-        <label class="form-label">Serviço / Site *</label>
-        <input type="text" id="vService" class="form-input" placeholder="Ex: Google, Netflix..." value="${isEdit ? escHtml(entry.service) : ''}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Login / E-mail</label>
-        <input type="text" id="vLogin" class="form-input" placeholder="usuario@email.com" value="${isEdit ? escHtml(entry.login || '') : ''}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Senha *</label>
-        <div class="input-group">
-          <input type="password" id="vPassword" class="form-input" placeholder="${isEdit ? 'Deixe em branco para manter' : 'Digite a senha'}" autocomplete="new-password">
-          <button class="input-group-btn" type="button" onclick="Vault._togglePassVis('vPassword')">👁</button>
+      <div class="vault-entry-form">
+        <div class="vault-entry-preview">
+          <div class="vault-entry-preview-icon" id="vIconPreview">${escHtml(initialIcon)}</div>
+          <div>
+            <div class="vault-entry-preview-title" id="vPreviewTitle">${isEdit ? escHtml(entry.service) : 'Nova senha'}</div>
+            <div class="vault-entry-preview-sub" id="vPreviewSub">${categoryInfo(initialCategory).label}</div>
+          </div>
         </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">URL</label>
-        <input type="url" id="vUrl" class="form-input" placeholder="https://..." value="${isEdit ? escHtml(entry.url || '') : ''}">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Notas</label>
-        <textarea id="vNotes" class="form-input" rows="2" placeholder="Observações opcionais...">${isEdit ? escHtml(entry.notes || '') : ''}</textarea>
+
+        <div class="vault-form-grid">
+          <div class="form-group">
+            <label class="form-label">URL</label>
+            <input type="url" id="vUrl" class="form-input" placeholder="https://exemplo.com" value="${isEdit ? escHtml(entry.url || '') : ''}" oninput="Vault.suggestFromEntry()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ícone</label>
+            <input type="text" id="vIcon" class="form-input" maxlength="2" value="${escHtml(initialIcon)}" oninput="Vault.updateEntryPreview()">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Serviço / Site *</label>
+          <input type="text" id="vService" class="form-input" placeholder="Ex: Google, Nubank, Netflix..." value="${isEdit ? escHtml(entry.service) : ''}" oninput="Vault.suggestFromEntry()">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <div class="vault-category-picker">
+            ${CATEGORIES.map(cat => `
+              <button type="button" class="vault-category-option ${cat.id === initialCategory ? 'active' : ''}" data-category="${cat.id}" onclick="Vault.selectEntryCategory('${cat.id}')">
+                <span>${cat.icon}</span>${cat.label}
+              </button>
+            `).join('')}
+          </div>
+          <input type="hidden" id="vCategory" value="${initialCategory}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Login / E-mail</label>
+          <input type="text" id="vLogin" class="form-input" placeholder="usuario@email.com" value="${isEdit ? escHtml(entry.login || '') : ''}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Senha *</label>
+          <div class="input-group">
+            <input type="password" id="vPassword" class="form-input" placeholder="${isEdit ? 'Deixe em branco para manter' : 'Digite ou gere uma senha forte'}" autocomplete="new-password">
+            <button class="input-group-btn" type="button" onclick="Vault.generatePassword()">Gerar</button>
+            <button class="input-group-btn" type="button" onclick="Vault._togglePassVis('vPassword')">👁</button>
+          </div>
+          <div class="vault-password-meter"><span id="vStrengthBar"></span></div>
+          <div class="vault-password-hint" id="vStrengthText">Use letras, números e símbolos.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notas</label>
+          <textarea id="vNotes" class="form-input" rows="2" placeholder="Observações opcionais...">${isEdit ? escHtml(entry.notes || '') : ''}</textarea>
+        </div>
       </div>
     `, [
       { label: 'Cancelar', class: 'btn-outline', action: () => AtlasApp.closeModal() },
       { label: isEdit ? 'Salvar' : 'Adicionar', class: 'btn-primary', action: () => saveEntry(isEdit ? entry.id : null) }
     ]);
+    setTimeout(() => {
+      const service = el('vService');
+      const password = el('vPassword');
+      if (service) service.focus();
+      if (password) password.addEventListener('input', updatePasswordStrength);
+      updateEntryPreview();
+      updatePasswordStrength();
+    }, 50);
   }
 
   function _togglePassVis(inputId) {
@@ -304,6 +390,8 @@ const Vault = (() => {
     const login    = (el('vLogin')    || {}).value?.trim() || '';
     const password = (el('vPassword') || {}).value || '';
     const url      = (el('vUrl')      || {}).value?.trim() || '';
+    const category = (el('vCategory') || {}).value || inferCategory(service, url);
+    const icon     = ((el('vIcon')    || {}).value || categoryInfo(category).icon).trim();
     const notes    = (el('vNotes')    || {}).value?.trim() || '';
 
     if (!service) { AtlasApp.toast('Informe o nome do serviço', 'error'); return; }
@@ -320,12 +408,12 @@ const Vault = (() => {
       }
 
       if (editId) {
-        Storage.update('vault.entries', editId, { service, login, encPassword, url, notes });
+        Storage.update('vault.entries', editId, { service, login, encPassword, url, notes, category, icon });
         AtlasApp.toast('Senha atualizada!', 'success');
         Storage.logActivity('Cofre', `Senha "${service}" atualizada`);
       } else {
         Storage.push('vault.entries', {
-          id: Storage.uid(), service, login, encPassword, url, notes, createdAt: new Date().toISOString()
+          id: Storage.uid(), service, login, encPassword, url, notes, category, icon, createdAt: new Date().toISOString()
         });
         AtlasApp.toast('Senha adicionada!', 'success');
         Storage.logActivity('Cofre', `Senha "${service}" adicionada`);
@@ -365,6 +453,22 @@ const Vault = (() => {
     });
   }
 
+  function renderFilters() {
+    const wrap = el('vaultCategoryFilters');
+    if (!wrap) return;
+    wrap.innerHTML = [{ id: 'all', label: 'Todas', icon: '✨' }, ...CATEGORIES].map(cat => `
+      <button type="button" class="vault-filter-chip ${categoryFilter === cat.id ? 'active' : ''}" onclick="Vault.setCategoryFilter('${cat.id}')">
+        <span>${cat.icon}</span>${cat.label}
+      </button>
+    `).join('');
+  }
+
+  function setCategoryFilter(cat) {
+    categoryFilter = cat || 'all';
+    renderFilters();
+    if (isUnlocked()) renderEntries();
+  }
+
   /* ---- lock ---- */
   function lockVault() {
     unlocked = false;
@@ -381,18 +485,121 @@ const Vault = (() => {
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function categoryInfo(id) {
+    return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
+  }
+
+  function normalizeCategory(entry) {
+    return entry.category || inferCategory(entry.service || '', entry.url || '');
+  }
+
+  function inferCategory(service, url) {
+    const text = `${service || ''} ${url || ''}`.toLowerCase();
+    const found = CATEGORIES.find(cat => cat.id !== 'other' && cat.domains.some(d => text.includes(d)));
+    if (found) return found.id;
+    if (/@/.test(service || '') || text.includes('mail')) return 'email';
+    if (text.includes('bank') || text.includes('banco')) return 'bank';
+    return url ? 'site' : 'other';
+  }
+
+  function cleanUrl(url) {
+    try {
+      const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+      return u.hostname.replace(/^www\./, '');
+    } catch { return url; }
+  }
+
+  function titleFromUrl(url) {
+    const host = cleanUrl(url).split('.')[0] || '';
+    return host ? host.charAt(0).toUpperCase() + host.slice(1) : '';
+  }
+
+  function suggestFromEntry() {
+    const serviceEl = el('vService');
+    const urlEl = el('vUrl');
+    const iconEl = el('vIcon');
+    const categoryEl = el('vCategory');
+    const service = serviceEl?.value || '';
+    const url = urlEl?.value || '';
+    if (!service.trim() && url.trim()) serviceEl.value = titleFromUrl(url);
+    const cat = inferCategory(serviceEl?.value || service, url);
+    if (categoryEl && !document.querySelector('.vault-category-option.user-picked')) selectEntryCategory(cat, true);
+    if (iconEl && !iconEl.dataset.userEdited) iconEl.value = categoryInfo(cat).icon;
+    updateEntryPreview();
+  }
+
+  function selectEntryCategory(cat, automatic = false) {
+    const categoryEl = el('vCategory');
+    const iconEl = el('vIcon');
+    if (categoryEl) categoryEl.value = cat;
+    document.querySelectorAll('.vault-category-option').forEach(btn => {
+      const active = btn.dataset.category === cat;
+      btn.classList.toggle('active', active);
+      if (!automatic && active) btn.classList.add('user-picked');
+    });
+    if (iconEl && (!iconEl.value || automatic)) iconEl.value = categoryInfo(cat).icon;
+    updateEntryPreview();
+  }
+
+  function updateEntryPreview() {
+    const service = (el('vService') || {}).value?.trim() || 'Nova senha';
+    const cat = (el('vCategory') || {}).value || 'other';
+    const icon = (el('vIcon') || {}).value || categoryInfo(cat).icon;
+    const iconPreview = el('vIconPreview');
+    const title = el('vPreviewTitle');
+    const sub = el('vPreviewSub');
+    if (iconPreview) iconPreview.textContent = icon;
+    if (title) title.textContent = service;
+    if (sub) sub.textContent = categoryInfo(cat).label;
+  }
+
+  function generatePassword() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?';
+    const arr = new Uint32Array(18);
+    crypto.getRandomValues(arr);
+    const pass = Array.from(arr, n => chars[n % chars.length]).join('');
+    const input = el('vPassword');
+    if (input) {
+      input.value = pass;
+      input.type = 'text';
+      updatePasswordStrength();
+      input.focus();
+    }
+  }
+
+  function updatePasswordStrength() {
+    const value = (el('vPassword') || {}).value || '';
+    const bar = el('vStrengthBar');
+    const text = el('vStrengthText');
+    let score = 0;
+    if (value.length >= 10) score++;
+    if (value.length >= 16) score++;
+    if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score++;
+    if (/\d/.test(value)) score++;
+    if (/[^A-Za-z0-9]/.test(value)) score++;
+    const pct = Math.min(100, score * 20);
+    if (bar) {
+      bar.style.width = pct + '%';
+      bar.className = score >= 4 ? 'strong' : score >= 3 ? 'medium' : 'weak';
+    }
+    if (text) text.textContent = !value ? 'Use letras, números e símbolos.' : score >= 4 ? 'Senha forte.' : score >= 3 ? 'Senha média.' : 'Senha fraca.';
+  }
+
   /* ---- public API ---- */
   function init() {
     setupSearch();
+    renderFilters();
   }
 
   return {
     init, render,
     openSetupModal, openUnlock, unlockApp,
-    openAddModal, openEdit, deleteEntry,
+    openAdd: openAddModal, openAddModal, openEdit, deleteEntry,
     toggleShowPass, copyPass, lockVault,
     isUnlocked,
     confirmReset, resetVault,
+    setCategoryFilter, selectEntryCategory, suggestFromEntry,
+    updateEntryPreview, generatePassword,
     _toggleMasterVis, _togglePassVis
   };
 })();

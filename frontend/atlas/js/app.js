@@ -187,7 +187,7 @@ const AtlasApp = (() => {
     buttons.forEach(b => {
       const btn = document.createElement('button');
       btn.className = 'btn ' + (b.class || 'btn-outline');
-      btn.textContent = b.text;
+      btn.textContent = b.text || b.label || '';
       btn.onclick = b.action;
       footer.appendChild(btn);
     });
