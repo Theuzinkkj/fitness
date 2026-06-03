@@ -2971,6 +2971,22 @@ textarea.form-input {
   box-shadow: var(--shadow);
 }
 
+.tool-card {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.tool-title {
+  margin: 0 0 16px;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.pomodoro-tool > .tool-title {
+  text-align: center;
+}
+
 /* Password generator */
 .passgen-output {
   display: flex;
@@ -3013,19 +3029,23 @@ textarea.form-input {
   gap: 20px;
 }
 
-.pomodoro-type-tabs {
+.pomodoro-type-tabs,
+.pom-phase-tabs {
   display: flex;
   gap: 8px;
   background: var(--surface-2);
   border-radius: var(--radius-sm);
   padding: 4px;
+  width: fit-content;
+  margin: 0 auto 16px;
 }
 
-.pomo-type-btn {
+.pomo-type-btn,
+.pom-tab {
   padding: 6px 14px;
   border-radius: 6px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 700;
   background: none;
   border: none;
   color: var(--text-muted);
@@ -3033,10 +3053,79 @@ textarea.form-input {
   transition: all var(--transition);
 }
 
-.pomo-type-btn.active {
-  background: var(--surface);
-  color: var(--text);
+.pomo-type-btn.active,
+.pom-tab.active {
+  background: var(--primary);
+  color: #fff;
   box-shadow: var(--shadow);
+}
+
+.pom-tab:hover {
+  color: var(--text);
+}
+
+.pom-tab.active:hover {
+  color: #fff;
+}
+
+.pom-circle-wrap {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  margin: 8px auto 12px;
+}
+
+.pom-circle-wrap svg {
+  display: block;
+}
+
+.pom-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  font-size: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pom-cycle {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.pom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pom-settings {
+  max-width: 720px;
+  margin-left: auto !important;
+  margin-right: auto;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pom-settings input[type="number"] {
+  appearance: textfield;
+}
+
+.pom-settings input[type="number"]::-webkit-outer-spin-button,
+.pom-settings input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  opacity: .35;
 }
 
 .pomodoro-timer {

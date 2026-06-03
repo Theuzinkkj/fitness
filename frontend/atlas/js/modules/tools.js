@@ -109,7 +109,7 @@ const Tools = (() => {
   function renderPomodoro() {
     const s = Storage.get('pomodoroSettings') || { work: 25, shortBreak: 5, longBreak: 15, cycles: 4 };
     return `
-      <div class="tool-card" style="text-align:center">
+      <div class="tool-card pomodoro-tool">
         <h3 class="tool-title">Pomodoro Timer</h3>
         <div class="pom-phase-tabs">
           <button class="pom-tab active" id="pomTabWork" onclick="Tools.pomSetPhase('work')">Foco</button>
@@ -128,7 +128,7 @@ const Tools = (() => {
           <button class="btn btn-primary" id="pomBtn" onclick="Tools.pomToggle()">▶ Iniciar</button>
           <button class="btn btn-ghost" onclick="Tools.pomReset()">↺ Resetar</button>
         </div>
-        <div class="pom-settings" style="margin-top:1.5rem;text-align:left">
+        <div class="pom-settings">
           <h4 style="font-size:.875rem;font-weight:600;margin-bottom:.5rem">Configurações</h4>
           <div class="form-grid-2">
             <div class="form-group"><label class="form-label">Foco (min)</label><input type="number" id="pomWork" class="form-input" value="${s.work}" min="1" max="99" onchange="Tools.pomSaveSettings()"/></div>
