@@ -2492,7 +2492,8 @@ textarea.form-input {
 .study-stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .study-stat {
@@ -4059,7 +4060,7 @@ kbd {
   .todos-stats,
   .study-stats {
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    gap: 12px;
   }
 
   .tools-tabs {
