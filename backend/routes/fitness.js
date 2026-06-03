@@ -19,6 +19,51 @@ router.put('/profile', async (req, res) => {
   res.json(data);
 });
 
+function pick(body, keys) {
+  return keys.reduce((out, key) => {
+    if (body[key] !== undefined) out[key] = body[key];
+    return out;
+  }, {});
+}
+
+function collectionRoutes(path, table, keys, order = 'created_at') {
+  router.get(path, async (req, res) => {
+    const { data, error } = await supabase.from(table).select('*').eq('user_id', req.user.id).order(order, { ascending: false });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json(data || []);
+  });
+
+  router.post(path, async (req, res) => {
+    const payload = pick(req.body, ['id', ...keys]);
+    if (!payload.id) payload.id = `${table}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const { data, error } = await supabase.from(table).insert({ ...payload, user_id: req.user.id }).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+    res.status(201).json(data);
+  });
+
+  router.put(`${path}/:id`, async (req, res) => {
+    const payload = pick(req.body, keys);
+    const { data, error } = await supabase.from(table)
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .select()
+      .single();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json(data);
+  });
+
+  router.delete(`${path}/:id`, async (req, res) => {
+    const { error } = await supabase.from(table).delete().eq('id', req.params.id).eq('user_id', req.user.id);
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ message: 'Excluido' });
+  });
+}
+
+collectionRoutes('/habits', 'fitness_habits', ['name', 'icon', 'period', 'checks']);
+collectionRoutes('/tasks', 'fitness_tasks', ['title', 'due', 'done'], 'due');
+collectionRoutes('/goals-fit', 'fitness_goals', ['title', 'category', 'photo', 'start', 'deadline', 'archived'], 'deadline');
+
 // WORKOUTS
 router.get('/workouts', async (req, res) => {
   const { data, error } = await supabase.from('workouts').select('*, exercises(*)').eq('user_id', req.user.id).order('created_at', { ascending: false });

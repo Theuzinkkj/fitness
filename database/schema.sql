@@ -308,6 +308,40 @@ CREATE TABLE IF NOT EXISTS body_measurements (
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS fitness_habits (
+  id         TEXT PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  icon       TEXT DEFAULT 'H',
+  period     TEXT DEFAULT 'DIA',
+  checks     JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS fitness_tasks (
+  id         TEXT PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  due        DATE NOT NULL DEFAULT CURRENT_DATE,
+  done       BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS fitness_goals (
+  id         TEXT PRIMARY KEY,
+  user_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  category   TEXT DEFAULT 'PESSOAL',
+  photo      TEXT DEFAULT '',
+  start      DATE NOT NULL DEFAULT CURRENT_DATE,
+  deadline   DATE NOT NULL DEFAULT CURRENT_DATE,
+  archived   BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ================================================
 -- ÍNDICES
 -- ================================================
@@ -327,6 +361,9 @@ CREATE INDEX IF NOT EXISTS idx_wlogs_user_date   ON workout_logs(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_meals_user_date   ON meals(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_water_user_date   ON water_logs(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_measures_user     ON body_measurements(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_fit_habits_user   ON fitness_habits(user_id);
+CREATE INDEX IF NOT EXISTS idx_fit_tasks_user    ON fitness_tasks(user_id, due);
+CREATE INDEX IF NOT EXISTS idx_fit_goals_user    ON fitness_goals(user_id, archived);
 
 -- ================================================
 -- ROW LEVEL SECURITY
@@ -334,7 +371,7 @@ CREATE INDEX IF NOT EXISTS idx_measures_user     ON body_measurements(user_id, d
 
 DO $$ DECLARE t TEXT;
 DECLARE atlas_tables TEXT[] := ARRAY['notes','todos','goals','events','diary_entries','links','library_items','vault_config','vault_entries','study_subjects','study_sessions','activity_log','file_folders','files_metadata','user_settings'];
-DECLARE fit_tables TEXT[] := ARRAY['workouts','workout_logs','meals','water_logs','body_measurements'];
+DECLARE fit_tables TEXT[] := ARRAY['workouts','workout_logs','meals','water_logs','body_measurements','fitness_habits','fitness_tasks','fitness_goals'];
 BEGIN
   FOREACH t IN ARRAY atlas_tables LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);

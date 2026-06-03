@@ -3,19 +3,37 @@
 const FitTasks = (() => {
   const KEY = 'atlasfit_tasks';
   let _view = 'today';
+  let _items = [];
 
-  function init() {
-    if (!localStorage.getItem(KEY)) save([
+  async function init() {
+    _items = localItems();
+    if (!_items.length) _items = [
       { id: uid(), title: 'Organizar mesa', due: FitnessApp.today(), done: false, createdAt: now() },
       { id: uid(), title: 'Revisar anotacoes', due: FitnessApp.today(), done: false, createdAt: now() }
-    ]);
+    ];
+    render();
+    await syncFromCloud();
+  }
+
+  async function syncFromCloud() {
+    const res = await FitnessAPI.get('/tasks');
+    if (!res.ok) return;
+    const remote = (res.data || []).map(fromApi);
+    if (remote.length) {
+      const localOnly = _items.filter(local => !remote.some(r => r.id === local.id || (r.title.toLowerCase() === local.title.toLowerCase() && r.due === local.due)));
+      if (localOnly.length) await Promise.all(localOnly.map(t => FitnessAPI.post('/tasks', toApi(t))));
+      _items = [...localOnly, ...remote];
+      saveLocal(_items);
+      render();
+      return;
+    }
+    if (_items.length) await Promise.all(_items.map(t => FitnessAPI.post('/tasks', toApi(t))));
   }
 
   function render() {
     const wrap = document.getElementById('tasksContent');
     if (!wrap) return;
-    const tasks = get();
-    const filtered = _view === 'today' ? tasks.filter(t => t.due === FitnessApp.today()) : tasks;
+    const filtered = _view === 'today' ? _items.filter(t => t.due === FitnessApp.today()) : _items;
     const pending = filtered.filter(t => !t.done).length;
     wrap.innerHTML = `
       <div class="hero-card">
@@ -43,28 +61,40 @@ const FitTasks = (() => {
     );
   }
 
-  function saveTask() {
+  async function saveTask() {
     const title = document.getElementById('taskTitle')?.value.trim();
     if (!title) { FitnessApp.toast('Digite a tarefa.', 'error'); return; }
-    const tasks = get();
-    tasks.unshift({ id: uid(), title, due: document.getElementById('taskDue')?.value || FitnessApp.today(), done: false, createdAt: now() });
-    save(tasks);
+    const item = { id: uid(), title, due: document.getElementById('taskDue')?.value || FitnessApp.today(), done: false, createdAt: now() };
+    _items.unshift(item);
+    saveLocal(_items);
     FitnessApp.closeModal();
     render();
+    const res = await FitnessAPI.post('/tasks', toApi(item));
+    if (!res.ok) FitnessApp.toast('Tarefa salva localmente. Sincroniza quando a API estiver pronta.', 'warning');
   }
 
-  function toggle(id) {
-    const tasks = get();
-    const t = tasks.find(x => x.id === id);
-    if (t) t.done = !t.done;
-    save(tasks);
+  async function toggle(id) {
+    const t = _items.find(x => x.id === id);
+    if (!t) return;
+    t.done = !t.done;
+    saveLocal(_items);
     render();
+    const res = await FitnessAPI.put(`/tasks/${id}`, toApi(t));
+    if (!res.ok) FitnessApp.toast('Mudanca salva localmente; a nuvem ainda nao respondeu.', 'warning');
   }
 
-  function remove(id) { save(get().filter(t => t.id !== id)); render(); }
+  async function remove(id) {
+    _items = _items.filter(t => t.id !== id);
+    saveLocal(_items);
+    render();
+    await FitnessAPI.del(`/tasks/${id}`);
+  }
+
   function setView(view) { _view = view === 'week' ? 'week' : 'today'; render(); }
-  function get() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
-  function save(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
+  function fromApi(row) { return { id: row.id, title: row.title, due: row.due, done: !!row.done, createdAt: row.created_at }; }
+  function toApi(t) { return { id: t.id, title: t.title, due: t.due || FitnessApp.today(), done: !!t.done }; }
+  function localItems() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
+  function saveLocal(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
   function uid() { return 't_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   function now() { return new Date().toISOString(); }
   function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''; }

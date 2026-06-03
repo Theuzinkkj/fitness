@@ -3,32 +3,40 @@
 const FitGoals = (() => {
   const KEY = 'atlasfit_goals';
   let _tab = 'active';
+  let _items = [];
 
-  function init() {
-    if (!localStorage.getItem(KEY)) save([{
-      id: uid(),
-      title: 'Secar o Shape',
-      category: 'PESSOAL',
-      photo: '',
-      start: FitnessApp.today(),
-      deadline: plusDays(90),
-      archived: false,
-      createdAt: now()
-    }]);
+  async function init() {
+    _items = localItems();
+    if (!_items.length) _items = [{ id: uid(), title: 'Secar o Shape', category: 'PESSOAL', photo: '', start: FitnessApp.today(), deadline: plusDays(90), archived: false, createdAt: now() }];
+    render();
+    await syncFromCloud();
+  }
+
+  async function syncFromCloud() {
+    const res = await FitnessAPI.get('/goals-fit');
+    if (!res.ok) return;
+    const remote = (res.data || []).map(fromApi);
+    if (remote.length) {
+      const localOnly = _items.filter(local => !remote.some(r => r.id === local.id || r.title.toLowerCase() === local.title.toLowerCase()));
+      if (localOnly.length) await Promise.all(localOnly.map(g => FitnessAPI.post('/goals-fit', toApi(g))));
+      _items = [...localOnly, ...remote];
+      saveLocal(_items);
+      render();
+      return;
+    }
+    if (_items.length) await Promise.all(_items.map(g => FitnessAPI.post('/goals-fit', toApi(g))));
   }
 
   function render() {
     const wrap = document.getElementById('goalsContent');
     if (!wrap) return;
-    const goals = get().filter(g => _tab === 'archived' ? g.archived : !g.archived);
+    const goals = _items.filter(g => _tab === 'archived' ? g.archived : !g.archived);
     wrap.innerHTML = `
       <div class="segmented">
         <button class="${_tab === 'active' ? 'active' : ''}" onclick="FitGoals.setTab('active')">Ativas</button>
         <button class="${_tab === 'archived' ? 'active' : ''}" onclick="FitGoals.setTab('archived')">Arquivadas</button>
       </div>
-      <div class="goals-grid">
-        ${goals.map(goalCard).join('') || '<div class="empty-state"><h3>Nenhuma meta aqui</h3><p>Crie ou arquive suas metas concluidas.</p></div>'}
-      </div>`;
+      <div class="goals-grid">${goals.map(goalCard).join('') || '<div class="empty-state"><h3>Nenhuma meta aqui</h3><p>Crie ou arquive suas metas concluidas.</p></div>'}</div>`;
   }
 
   function goalCard(g) {
@@ -62,36 +70,33 @@ const FitGoals = (() => {
     );
   }
 
-  function saveGoal() {
+  async function saveGoal() {
     const title = document.getElementById('goalTitle')?.value.trim();
     if (!title) { FitnessApp.toast('Digite a meta.', 'error'); return; }
-    const goals = get();
-    goals.unshift({
-      id: uid(),
-      title,
-      category: document.getElementById('goalCategory')?.value.trim() || 'PESSOAL',
-      photo: document.getElementById('goalPhoto')?.value.trim(),
-      start: document.getElementById('goalStart')?.value || FitnessApp.today(),
-      deadline: document.getElementById('goalDeadline')?.value || plusDays(90),
-      archived: false,
-      createdAt: now()
-    });
-    save(goals);
+    const item = { id: uid(), title, category: document.getElementById('goalCategory')?.value.trim() || 'PESSOAL', photo: document.getElementById('goalPhoto')?.value.trim(), start: document.getElementById('goalStart')?.value || FitnessApp.today(), deadline: document.getElementById('goalDeadline')?.value || plusDays(90), archived: false, createdAt: now() };
+    _items.unshift(item);
+    saveLocal(_items);
     FitnessApp.closeModal();
     render();
+    const res = await FitnessAPI.post('/goals-fit', toApi(item));
+    if (!res.ok) FitnessApp.toast('Meta salva localmente. Sincroniza quando a API estiver pronta.', 'warning');
   }
 
-  function toggleArchive(id) {
-    const goals = get();
-    const g = goals.find(x => x.id === id);
-    if (g) g.archived = !g.archived;
-    save(goals);
+  async function toggleArchive(id) {
+    const g = _items.find(x => x.id === id);
+    if (!g) return;
+    g.archived = !g.archived;
+    saveLocal(_items);
     render();
+    const res = await FitnessAPI.put(`/goals-fit/${id}`, toApi(g));
+    if (!res.ok) FitnessApp.toast('Mudanca salva localmente; a nuvem ainda nao respondeu.', 'warning');
   }
 
   function setTab(tab) { _tab = tab === 'archived' ? 'archived' : 'active'; render(); }
-  function get() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
-  function save(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
+  function fromApi(row) { return { id: row.id, title: row.title, category: row.category, photo: row.photo || '', start: row.start, deadline: row.deadline, archived: !!row.archived, createdAt: row.created_at }; }
+  function toApi(g) { return { id: g.id, title: g.title, category: g.category || 'PESSOAL', photo: g.photo || '', start: g.start || FitnessApp.today(), deadline: g.deadline || plusDays(90), archived: !!g.archived }; }
+  function localItems() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } }
+  function saveLocal(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
   function diffDays(a, b) { return Math.max(0, Math.ceil((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000)); }
   function plusDays(n) { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
   function uid() { return 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
