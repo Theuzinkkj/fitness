@@ -1,0 +1,20 @@
+{
+  "name": "Hub Pessoal",
+  "short_name": "Hub",
+  "description": "Launcher pessoal para Atlas e FitHub.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "orientation": "any",
+  "lang": "pt-BR",
+  "scope": "/",
+  "icons": [
+    { "src": "/icons/launcher.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Atlas", "url": "/atlas" },
+    { "name": "FitHub", "url": "/fitness" }
+  ]
+}

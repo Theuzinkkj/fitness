@@ -1,0 +1,21 @@
+{
+  "name": "FitHub - Fitness Pessoal",
+  "short_name": "FitHub",
+  "description": "App pessoal de fitness, treinos, nutricao e progresso.",
+  "start_url": "/fitness",
+  "id": "/fitness",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "orientation": "any",
+  "lang": "pt-BR",
+  "scope": "/fitness/",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Dashboard", "url": "/fitness#dashboard" },
+    { "name": "Treinos", "url": "/fitness#workouts" },
+    { "name": "Perfil", "url": "/fitness#profile" }
+  ]
+}
