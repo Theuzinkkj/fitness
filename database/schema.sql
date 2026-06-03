@@ -375,19 +375,25 @@ DECLARE fit_tables TEXT[] := ARRAY['workouts','workout_logs','meals','water_logs
 BEGIN
   FOREACH t IN ARRAY atlas_tables LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "%s_policy" ON %I;', t, t);
     EXECUTE format('CREATE POLICY "%s_policy" ON %I USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());', t, t);
   END LOOP;
   FOREACH t IN ARRAY fit_tables LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);
+    EXECUTE format('DROP POLICY IF EXISTS "%s_policy" ON %I;', t, t);
     EXECUTE format('CREATE POLICY "%s_policy" ON %I USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());', t, t);
   END LOOP;
 END $$;
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "profiles_policy" ON profiles;
 CREATE POLICY "profiles_policy" ON profiles USING (id = auth.uid()) WITH CHECK (id = auth.uid());
 
+DROP POLICY IF EXISTS "exercises_policy" ON exercises;
 CREATE POLICY "exercises_policy" ON exercises USING (workout_id IN (SELECT id FROM workouts WHERE user_id = auth.uid()));
+DROP POLICY IF EXISTS "exercise_logs_policy" ON exercise_logs;
 CREATE POLICY "exercise_logs_policy" ON exercise_logs USING (workout_log_id IN (SELECT id FROM workout_logs WHERE user_id = auth.uid()));
+DROP POLICY IF EXISTS "food_items_policy" ON food_items;
 CREATE POLICY "food_items_policy" ON food_items USING (meal_id IN (SELECT id FROM meals WHERE user_id = auth.uid()));
 
 ALTER TABLE exercises       ENABLE ROW LEVEL SECURITY;
