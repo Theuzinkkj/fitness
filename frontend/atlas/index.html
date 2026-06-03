@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/atlas/css/app.css?v=2.1.5"/>
+  <link rel="stylesheet" href="/atlas/css/app.css?v=2.1.6"/>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
@@ -338,18 +338,20 @@
     <section id="sec-calendar" class="section hidden">
       <div class="section-header">
         <div><h2>Agenda</h2><p class="text-muted" id="calendarSubtitle"></p></div>
-        <div class="btn-group">
-          <button class="btn btn-outline" id="calViewMonth" onclick="Calendar.setView('month')">Mês</button>
-          <button class="btn btn-outline" id="calViewWeek" onclick="Calendar.setView('week')">Semana</button>
-          <button class="btn btn-outline" id="calViewDay" onclick="Calendar.setView('day')">Dia</button>
+        <div class="calendar-actions">
+          <div class="view-toggle">
+            <button class="view-btn active" data-view="month" id="calViewMonth" onclick="Calendar.setView('month')">Mês</button>
+            <button class="view-btn" data-view="week" id="calViewWeek" onclick="Calendar.setView('week')">Semana</button>
+            <button class="view-btn" data-view="day" id="calViewDay" onclick="Calendar.setView('day')">Dia</button>
+          </div>
           <button class="btn btn-atlas" onclick="Calendar.openAdd()">+ Evento</button>
         </div>
       </div>
       <div class="calendar-nav">
-        <button class="btn btn-icon-only" onclick="Calendar.prev()">‹</button>
-        <h3 id="calendarNavTitle"></h3>
-        <button class="btn btn-icon-only" onclick="Calendar.next()">›</button>
-        <button class="btn btn-outline btn-sm" onclick="Calendar.goToday()">Hoje</button>
+        <button class="calendar-nav-btn" onclick="Calendar.prev()" title="Anterior">‹</button>
+        <h3 id="calendarTitle" class="calendar-title"></h3>
+        <button class="calendar-nav-btn" onclick="Calendar.next()" title="Próximo">›</button>
+        <button class="calendar-today-btn" onclick="Calendar.goToday()">Hoje</button>
       </div>
       <div id="calendarView"></div>
     </section>
@@ -561,24 +563,24 @@
 </div>
 
 <!-- SCRIPTS -->
-<script src="/atlas/js/storage.js?v=2.1.5"></script>
-<script src="/atlas/js/crypto.js?v=2.1.5"></script>
-<script src="/atlas/js/api.js?v=2.1.5"></script>
-<script src="/atlas/js/auth.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/dashboard.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/vault.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/notes.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/todos.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/goals.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/calendar.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/diary.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/study.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/links.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/library.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/files.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/tools.js?v=2.1.5"></script>
-<script src="/atlas/js/modules/assistant.js?v=2.1.5"></script>
-<script src="/atlas/js/app.js?v=2.1.5"></script>
+<script src="/atlas/js/storage.js?v=2.1.6"></script>
+<script src="/atlas/js/crypto.js?v=2.1.6"></script>
+<script src="/atlas/js/api.js?v=2.1.6"></script>
+<script src="/atlas/js/auth.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/dashboard.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/vault.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/notes.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/todos.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/goals.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/calendar.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/diary.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/study.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/links.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/library.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/files.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/tools.js?v=2.1.6"></script>
+<script src="/atlas/js/modules/assistant.js?v=2.1.6"></script>
+<script src="/atlas/js/app.js?v=2.1.6"></script>
 <script>
   // Vault unlock helpers
   function withVaultTimeout(promise, label) {

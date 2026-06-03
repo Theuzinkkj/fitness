@@ -2097,22 +2097,70 @@ textarea.form-input {
 .calendar-nav {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  width: fit-content;
+  margin-bottom: 12px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 .calendar-title {
+  min-width: 220px;
+  margin: 0;
+  padding: 0 10px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--text);
-  min-width: 160px;
   text-align: center;
+  letter-spacing: 0;
+}
+
+.calendar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.calendar-nav-btn,
+.calendar-today-btn {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 800;
+  transition: background var(--transition), border-color var(--transition), color var(--transition), transform var(--transition);
+}
+
+.calendar-nav-btn {
+  width: 40px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.calendar-today-btn {
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.calendar-nav-btn:hover,
+.calendar-today-btn:hover {
+  background: var(--primary-bg);
+  border-color: var(--primary-light);
+  color: var(--primary);
+  transform: translateY(-1px);
 }
 
 .view-toggle {
   display: flex;
   gap: 4px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 3px;
 }
 
@@ -2129,8 +2177,8 @@ textarea.form-input {
 }
 
 .view-btn.active {
-  background: var(--surface);
-  color: var(--text);
+  background: var(--primary);
+  color: #fff;
   box-shadow: var(--shadow);
 }
 
@@ -3765,6 +3813,20 @@ kbd {
   .section-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .calendar-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .calendar-nav {
+    width: 100%;
+  }
+
+  .calendar-title {
+    min-width: 0;
+    flex: 1;
   }
 
   .diary-layout {

@@ -317,7 +317,7 @@ const Calendar = (() => {
   return {
     init, render,
     setView, prev, next, goToday, clickDay,
-    openAddEvent, deleteEvent,
+    openAdd: openAddEvent, openAddEvent, deleteEvent,
     _pickColor
   };
 })();
