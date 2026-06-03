@@ -3,11 +3,14 @@
 const Assistant = (() => {
   let _history = [];
   const MAX_HISTORY = 10;
+  const MAX_IMAGE_SIZE = 6 * 1024 * 1024;
   let _aiAvailable = null;
+  let _pendingImage = null;
 
   function init() {
     _aiAvailable = typeof Auth !== 'undefined' && Auth.isLoggedIn() && navigator.onLine;
     updateBadge();
+    bindPasteUpload();
   }
 
   function updateBadge() {
@@ -22,24 +25,26 @@ const Assistant = (() => {
 
   function send() {
     const input = document.getElementById('assistantInput');
-    if (!input?.value.trim()) return;
-    const msg = input.value.trim();
+    const msg = input?.value.trim() || '';
+    const image = _pendingImage;
+    if (!msg && !image) return;
     input.value = '';
-    query(msg);
+    clearImage();
+    query(msg || 'Analise este print.', image);
   }
 
-  async function query(text) {
-    addMessage(text, 'user');
+  async function query(text, image = null) {
+    addMessage(text, 'user', false, image);
     const typingEl = showTyping();
 
     if (typeof Auth !== 'undefined' && Auth.isLoggedIn() && navigator.onLine) {
       try {
-        const result = await API.post('/ai/chat', { message: text, history: _history.slice(-MAX_HISTORY) });
+        const result = await API.post('/ai/chat', { message: text, image, history: _history.slice(-MAX_HISTORY) });
         typingEl.remove();
         if (result.ok) {
           _aiAvailable = true;
           updateBadge();
-          _history.push({ role: 'user', content: text });
+          _history.push({ role: 'user', content: image ? `${text} [print anexado]` : text });
           _history.push({ role: 'assistant', content: result.data.reply });
           if (_history.length > MAX_HISTORY * 2) _history = _history.slice(-MAX_HISTORY * 2);
           addMessage(result.data.reply, 'bot', true);
@@ -47,7 +52,8 @@ const Assistant = (() => {
         }
         _aiAvailable = false;
         updateBadge();
-        if (result.error) AtlasApp.toast(result.error, 'warning');
+        const errMsg = result.data?.error || result.error;
+        if (errMsg) AtlasApp.toast(errMsg, 'warning');
       } catch {
         typingEl.remove();
         _aiAvailable = false;
@@ -55,10 +61,123 @@ const Assistant = (() => {
       }
       typingEl.remove?.();
     } else {
-      setTimeout(() => { typingEl.remove(); addMessage(processQuery(text.toLowerCase()), 'bot'); }, 500 + Math.random() * 300);
+      setTimeout(() => {
+        typingEl.remove();
+        addMessage(image ? '<p>Para analisar prints, faca login e use a IA real do Atlas.</p>' : processQuery(text.toLowerCase()), 'bot', true);
+      }, 500 + Math.random() * 300);
       return;
     }
-    addMessage(processQuery(text.toLowerCase()), 'bot');
+    addMessage(image ? '<p>Nao consegui analisar esse print agora. Verifique o modelo de visao configurado no backend e tente novamente.</p>' : processQuery(text.toLowerCase()), 'bot', true);
+  }
+
+  function pickImage() {
+    document.getElementById('assistantImageInput')?.click();
+  }
+
+  async function handleImage(files) {
+    const file = files?.[0];
+    const input = document.getElementById('assistantImageInput');
+    if (input) input.value = '';
+    if (!file) return;
+    if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) {
+      AtlasApp.toast('Envie um print PNG, JPG ou WebP.', 'warning');
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      AtlasApp.toast('Imagem muito grande. O limite e 6MB.', 'warning');
+      return;
+    }
+    try {
+      _pendingImage = await fileToImagePayload(file);
+      if ((_pendingImage.size || 0) > MAX_IMAGE_SIZE) {
+        _pendingImage = null;
+        AtlasApp.toast('Imagem muito grande mesmo apos otimizar. Tente recortar o print.', 'warning');
+        return;
+      }
+      renderImagePreview();
+      document.getElementById('assistantInput')?.focus();
+    } catch {
+      AtlasApp.toast('Nao consegui carregar essa imagem.', 'error');
+    }
+  }
+
+  function bindPasteUpload() {
+    const input = document.getElementById('assistantInput');
+    if (!input || input.dataset.pasteBound === '1') return;
+    input.dataset.pasteBound = '1';
+    input.addEventListener('paste', (event) => {
+      const item = Array.from(event.clipboardData?.items || []).find(i => i.type.startsWith('image/'));
+      if (!item) return;
+      event.preventDefault();
+      handleImage([item.getAsFile()]);
+    });
+  }
+
+  function renderImagePreview() {
+    const box = document.getElementById('assistantImagePreview');
+    if (!box) return;
+    if (!_pendingImage) {
+      box.classList.add('hidden');
+      box.innerHTML = '';
+      return;
+    }
+    box.classList.remove('hidden');
+    box.innerHTML = `
+      <div class="assistant-image-chip">
+        <img src="${_pendingImage.dataUrl}" alt="Print anexado">
+        <div>
+          <strong>${esc(_pendingImage.name || 'Print anexado')}</strong>
+          <span>${formatBytes(_pendingImage.size || 0)}</span>
+        </div>
+        <button onclick="Assistant.removeImage()" aria-label="Remover print">x</button>
+      </div>`;
+  }
+
+  function removeImage() {
+    clearImage();
+  }
+
+  function clearImage() {
+    _pendingImage = null;
+    renderImagePreview();
+  }
+
+  async function fileToImagePayload(file) {
+    const dataUrl = await readFileAsDataUrl(file);
+    const resized = await resizeImageDataUrl(dataUrl, file.type);
+    return { dataUrl: resized.dataUrl, name: file.name || 'print.png', type: resized.type, size: resized.size };
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function resizeImageDataUrl(dataUrl, type) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1600;
+        const ratio = Math.min(1, max / Math.max(img.width, img.height));
+        if (ratio === 1 && dataUrl.length < MAX_IMAGE_SIZE * 1.34) {
+          resolve({ dataUrl, type, size: Math.ceil(dataUrl.length * 0.75) });
+          return;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * ratio));
+        canvas.height = Math.max(1, Math.round(img.height * ratio));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const outType = type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const out = canvas.toDataURL(outType, 0.85);
+        resolve({ dataUrl: out, type: outType, size: Math.ceil(out.length * 0.75) });
+      };
+      img.onerror = () => resolve({ dataUrl, type, size: Math.ceil(dataUrl.length * 0.75) });
+      img.src = dataUrl;
+    });
   }
 
   function showTyping() {
@@ -71,7 +190,7 @@ const Assistant = (() => {
     return el;
   }
 
-  function addMessage(text, role, isMarkdown = false) {
+  function addMessage(text, role, isMarkdown = false, image = null) {
     const chat = document.getElementById('assistantChat');
     if (!chat) return;
     const div = document.createElement('div');
@@ -80,7 +199,8 @@ const Assistant = (() => {
     if (role === 'bot') {
       div.innerHTML = `<div class="bot-avatar"><svg width="24" height="24" viewBox="0 0 36 36" fill="none"><circle cx="18" cy="18" r="17" stroke="currentColor" stroke-width="1.5"/><path d="M18 4 L30 30 L6 30 Z" fill="currentColor" opacity="0.9"/><circle cx="18" cy="14" r="3" fill="white"/></svg></div><div class="message-bubble">${content}</div>`;
     } else {
-      div.innerHTML = `<div class="message-bubble">${esc(text)}</div>`;
+      const imageHtml = image ? `<img class="message-image" src="${image.dataUrl}" alt="Print enviado">` : '';
+      div.innerHTML = `<div class="message-bubble">${imageHtml}${esc(text)}</div>`;
     }
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
@@ -213,6 +333,11 @@ const Assistant = (() => {
   function fmtDate(d) { return d ? new Date(d+'T00:00:00').toLocaleDateString('pt-BR') : ''; }
   function fmtTime(m) { const h=Math.floor(m/60),min=m%60; return h>0?`${h}h${min>0?min+'m':''}`:min+'m'; }
   function esc(s) { return s?String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'):''; }
+  function formatBytes(bytes) {
+    if (!bytes) return 'Imagem pronta';
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
 
-  return { init, send, query, clear };
+  return { init, send, query, clear, pickImage, handleImage, removeImage };
 })();

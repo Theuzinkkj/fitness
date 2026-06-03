@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/atlas/css/app.css?v=2.1.14"/>
+  <link rel="stylesheet" href="/atlas/css/app.css?v=2.1.15"/>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 </head>
@@ -468,7 +468,12 @@
           <button class="suggestion-chip" onclick="Assistant.query('Resumo geral do meu progresso')">Resumo geral</button>
         </div>
         <div class="assistant-input-area">
+          <div id="assistantImagePreview" class="assistant-image-preview hidden"></div>
           <div class="assistant-input-wrap">
+            <button class="assistant-attach-btn" onclick="Assistant.pickImage()" title="Enviar print" aria-label="Enviar print">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            </button>
+            <input type="file" id="assistantImageInput" accept="image/png,image/jpeg,image/webp" hidden onchange="Assistant.handleImage(this.files)"/>
             <input class="assistant-input" type="text" id="assistantInput" placeholder="Pergunte qualquer coisa…" onkeydown="if(event.key==='Enter')Assistant.send()"/>
             <button class="assistant-send-btn" onclick="Assistant.send()">Enviar</button>
           </div>
@@ -563,24 +568,24 @@
 </div>
 
 <!-- SCRIPTS -->
-<script src="/atlas/js/storage.js?v=2.1.14"></script>
-<script src="/atlas/js/crypto.js?v=2.1.14"></script>
-<script src="/atlas/js/api.js?v=2.1.14"></script>
-<script src="/atlas/js/auth.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/dashboard.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/vault.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/notes.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/todos.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/goals.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/calendar.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/diary.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/study.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/links.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/library.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/files.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/tools.js?v=2.1.14"></script>
-<script src="/atlas/js/modules/assistant.js?v=2.1.14"></script>
-<script src="/atlas/js/app.js?v=2.1.14"></script>
+<script src="/atlas/js/storage.js?v=2.1.15"></script>
+<script src="/atlas/js/crypto.js?v=2.1.15"></script>
+<script src="/atlas/js/api.js?v=2.1.15"></script>
+<script src="/atlas/js/auth.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/dashboard.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/vault.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/notes.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/todos.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/goals.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/calendar.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/diary.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/study.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/links.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/library.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/files.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/tools.js?v=2.1.15"></script>
+<script src="/atlas/js/modules/assistant.js?v=2.1.15"></script>
+<script src="/atlas/js/app.js?v=2.1.15"></script>
 <script>
   // Vault unlock helpers
   function withVaultTimeout(promise, label) {
