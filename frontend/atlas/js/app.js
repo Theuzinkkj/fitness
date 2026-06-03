@@ -32,8 +32,9 @@ const AtlasApp = (() => {
       document.getElementById('authScreen').classList.add('visible');
       return;
     }
-    await Auth.loadAllData();
+    Storage.enableSync(API);
     await checkVaultSetup();
+    Auth.loadAllData().then(refreshCurrentSection).catch(() => {});
   }
 
   async function checkVaultSetup() {
@@ -136,6 +137,13 @@ const AtlasApp = (() => {
 
     // Close sidebar on mobile
     if (window.innerWidth < 768) closeSidebar();
+  }
+
+  function refreshCurrentSection() {
+    const mod = MODULES[_currentSection];
+    if (mod && typeof mod.render === 'function' && !document.getElementById('app')?.classList.contains('hidden')) {
+      try { mod.render(); } catch(e) { console.warn('Module refresh error:', e); }
+    }
   }
 
   // ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -356,7 +364,7 @@ const AtlasApp = (() => {
   document.addEventListener('DOMContentLoaded', init);
 
   return {
-    init, launchApp, navigate, skipVault, checkVaultSetup,
+    init, launchApp, navigate, skipVault, checkVaultSetup, refreshCurrentSection,
     toggleTheme, setTheme, toggleSidebar, closeSidebar, toggleFocusMode,
     openModal, closeModal, toast, notify,
     performSearch, closeSearch, goToResult,

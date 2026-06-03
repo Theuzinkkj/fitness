@@ -1,5 +1,5 @@
 /* ===== ATLAS SERVICE WORKER ===== */
-const CACHE_VERSION = 'atlas-v2.1.16';
+const CACHE_VERSION = 'atlas-v2.1.17';
 const CORE_ASSETS = [
   '/atlas', '/atlas/', '/atlas/index.html',
   '/atlas/css/app.css',
@@ -40,6 +40,19 @@ self.addEventListener('fetch', e => {
     return;
   }
 
+  if (isStaticAsset(url, request)) {
+    e.respondWith(caches.open(CACHE_VERSION).then(c => {
+      return c.match(request, { ignoreSearch: true }).then(cached => {
+        const fresh = fetch(request).then(res => {
+          if (res?.status === 200) c.put(request, res.clone());
+          return res;
+        }).catch(() => cached);
+        return cached || fresh;
+      });
+    }));
+    return;
+  }
+
   e.respondWith(caches.open(CACHE_VERSION).then(c => {
     return fetch(request)
       .then(res => {
@@ -49,3 +62,9 @@ self.addEventListener('fetch', e => {
       .catch(() => c.match(request, { ignoreSearch: true }).then(cached => cached || new Response('Offline', { status: 503 })));
   }));
 });
+
+function isStaticAsset(url, request) {
+  if (!url.pathname.startsWith('/atlas/')) return false;
+  if (request.mode === 'navigate' || request.destination === 'document') return false;
+  return /\.(css|js|svg|png|jpg|jpeg|webp|ico|json)$/i.test(url.pathname);
+}
