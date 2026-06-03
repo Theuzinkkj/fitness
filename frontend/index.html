@@ -87,7 +87,8 @@
     .launcher-brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
     .launcher-brand svg { width: 32px; height: 32px; }
     .launcher-header-right { display: flex; align-items: center; gap: 12px; }
-    .user-info { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+    .user-info { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); border: 1px solid transparent; background: transparent; border-radius: 12px; padding: 4px 6px 4px 4px; cursor: pointer; font-family: inherit; transition: all .2s; }
+    .user-info:hover { background: var(--surface); border-color: var(--border); color: var(--text); }
     .user-avatar { width: 34px; height: 34px; background: linear-gradient(135deg, var(--atlas), var(--atlas-dark)); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
     .btn-icon { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .2s; }
     .btn-icon:hover { background: var(--bg); color: var(--text); }
@@ -137,10 +138,21 @@
       box-shadow: 0 4px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
     }
 
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.48); display: none; align-items: center; justify-content: center; padding: 24px; z-index: 10000; }
+    .modal-overlay.visible { display: flex; }
+    .modal-card { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg); padding: 24px; }
+    .modal-card h3 { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+    .modal-card p { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .btn-secondary { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-secondary:hover { color: var(--text); border-color: var(--text-muted); }
+    .btn-fit-content { width: auto; }
+
     @media (max-width: 640px) {
       .launcher-header { padding: 16px 20px; }
       .launcher-brand span { display: none; }
       .user-info span { display: none; }
+      .user-info { padding-right: 4px; }
       .launcher-greeting h2 { font-size: 24px; }
       .apps-dock { gap: 20px; }
       .app-icon-wrap { width: 72px; height: 72px; border-radius: 18px; }
@@ -245,10 +257,10 @@
         <span>Hub Pessoal</span>
       </div>
       <div class="launcher-header-right">
-        <div class="user-info">
+        <button class="user-info" onclick="openNameModal()" title="Alterar nome de exibicao">
           <div class="user-avatar" id="userAvatar">U</div>
           <span id="userDisplayName"></span>
-        </div>
+        </button>
         <button class="btn-icon" onclick="toggleTheme()" title="Alternar tema">
           <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
@@ -286,9 +298,25 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="nameModal" onclick="closeNameModal(event)">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="nameModalTitle">
+      <h3 id="nameModalTitle">Nome de exibicao</h3>
+      <p>Escolha como seu nome deve aparecer no launcher.</p>
+      <div class="form-group">
+        <label for="displayNameInput">Nome</label>
+        <input type="text" id="displayNameInput" maxlength="40" placeholder="Como quer ser chamado?" onkeydown="if(event.key==='Enter')saveDisplayName()"/>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-fit-content" onclick="clearDisplayName()">Usar padrao</button>
+        <button class="btn btn-primary btn-fit-content" onclick="saveDisplayName()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API_BASE = window.location.origin + '/api';
     let _token = localStorage.getItem('atlas_token');
+    let _currentUser = null;
 
     async function apiFetch(path, opts = {}) {
       const headers = { 'Content-Type': 'application/json' };
@@ -317,19 +345,66 @@
     }
 
     function showLauncher(user) {
+      _currentUser = user;
+      localStorage.setItem('atlas_user', JSON.stringify(user));
       document.getElementById('loadingScreen').style.display = 'none';
       document.getElementById('authScreen').classList.remove('visible');
       document.getElementById('launcherScreen').classList.add('visible');
-      const name = user.user_metadata?.name || user.email?.split('@')[0] || 'usuário';
-      const hr = new Date().getHours();
-      const greet = hr < 12 ? 'Bom dia' : hr < 18 ? 'Boa tarde' : 'Boa noite';
-      document.getElementById('greeting').textContent = greet + ', ' + name + '!';
-      document.getElementById('userDisplayName').textContent = name;
-      document.getElementById('userAvatar').textContent = name[0].toUpperCase();
+      updateLauncherName();
       const days = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
       const months = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
       const d = new Date();
       document.getElementById('launcherDate').textContent = days[d.getDay()] + ', ' + d.getDate() + ' de ' + months[d.getMonth()] + ' de ' + d.getFullYear();
+    }
+
+    function getNameStorageKey(user = _currentUser) {
+      return 'hub_display_name:' + (user?.id || user?.email || 'local');
+    }
+
+    function getDefaultName(user = _currentUser) {
+      return user?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'usuario';
+    }
+
+    function getDisplayName(user = _currentUser) {
+      return localStorage.getItem(getNameStorageKey(user)) || getDefaultName(user);
+    }
+
+    function updateLauncherName() {
+      const name = getDisplayName();
+      const hr = new Date().getHours();
+      const greet = hr < 12 ? 'Bom dia' : hr < 18 ? 'Boa tarde' : 'Boa noite';
+      document.getElementById('greeting').textContent = greet + ', ' + name + '!';
+      document.getElementById('userDisplayName').textContent = name;
+      document.getElementById('userAvatar').textContent = (name[0] || 'U').toUpperCase();
+      if (_currentUser) {
+        localStorage.setItem('atlas_user', JSON.stringify({ ..._currentUser, name }));
+      }
+    }
+
+    function openNameModal() {
+      document.getElementById('displayNameInput').value = getDisplayName();
+      document.getElementById('nameModal').classList.add('visible');
+      setTimeout(() => document.getElementById('displayNameInput').focus(), 0);
+    }
+
+    function closeNameModal(event) {
+      if (!event || event.target.id === 'nameModal') {
+        document.getElementById('nameModal').classList.remove('visible');
+      }
+    }
+
+    function saveDisplayName() {
+      const value = document.getElementById('displayNameInput').value.trim().replace(/\s+/g, ' ');
+      if (!value) return clearDisplayName();
+      localStorage.setItem(getNameStorageKey(), value);
+      updateLauncherName();
+      closeNameModal();
+    }
+
+    function clearDisplayName() {
+      localStorage.removeItem(getNameStorageKey());
+      updateLauncherName();
+      closeNameModal();
     }
 
     async function login() {
